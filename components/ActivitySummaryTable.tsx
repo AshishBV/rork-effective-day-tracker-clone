@@ -13,7 +13,7 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
   const { sortedActivities, getActivityByCode } = useActivities();
 
   const getRowStatus = (code: string, hours: number): 'red' | 'green' | 'neutral' => {
-    const redCodes = ['I', 'TW', 'CA'];
+    const redCodes = ['I', 'TW', 'S', 'CA'];
     if (redCodes.includes(code) && hours > 1) return 'red';
 
     if (code === 'A' && hours >= 2) return 'green';
