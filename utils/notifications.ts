@@ -422,6 +422,50 @@ async function dismissAllNotificationsForSlot(slotMinutes: number | undefined): 
   }
 }
 
+function generateTimeSlotsForNotification(timeSettings: { slotDuration: number; dayStartHour: number; dayStartMinute: number; dayEndHour: number; dayEndMinute: number }): any[] {
+  const slots: any[] = [];
+  const startMinutes = timeSettings.dayStartHour * 60 + timeSettings.dayStartMinute;
+  const endMinutes = timeSettings.dayEndHour * 60 + timeSettings.dayEndMinute;
+  let idx = 0;
+  for (let m = startMinutes; m < endMinutes; m += timeSettings.slotDuration) {
+    const endM = m + timeSettings.slotDuration;
+    const timeIn = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;
+    const timeOut = `${Math.floor(endM / 60).toString().padStart(2, '0')}:${(endM % 60).toString().padStart(2, '0')}`;
+    slots.push({
+      index: idx,
+      timeIn,
+      timeOut,
+      activityCategory: null,
+      plannedCategory: null,
+      performedActivityText: '',
+      pointsOverride: null,
+    });
+    idx++;
+  }
+  return slots;
+}
+
+function createEmptyDayForNotification(dateKey: string): any {
+  const slots = generateTimeSlotsForNotification({
+    slotDuration: 15,
+    dayStartHour: 5,
+    dayStartMinute: 0,
+    dayEndHour: 23,
+    dayEndMinute: 0,
+  });
+  return {
+    date: dateKey,
+    slots,
+    habits: [false, false, false, false, false],
+    habitCompletions: {},
+    todos: Array(5).fill(null).map(() => ({ text: '', completed: false })),
+    gratitude: ['', '', ''],
+    highlights: ['', '', '', '', ''],
+    sleepHours: null,
+    steps: null,
+  };
+}
+
 export async function saveSlotDirectToStorage(
   slotIndex: number,
   activityCode: string,
@@ -429,17 +473,38 @@ export async function saveSlotDirectToStorage(
 ): Promise<boolean> {
   try {
     const DAYS_KEY = 'effective_day_tracker_days';
+    const SETTINGS_KEY = 'effective_day_tracker_settings';
     const stored = await AsyncStorage.getItem(DAYS_KEY);
     const days = stored ? JSON.parse(stored) : {};
 
     if (!days[dateKey]) {
-      console.log(`[Notifications] No day data for ${dateKey}, creating slot will happen via context`);
-      return false;
+      const settingsStored = await AsyncStorage.getItem(SETTINGS_KEY);
+      const settings = settingsStored ? JSON.parse(settingsStored) : null;
+      const timeSettings = settings?.timeSettings || {
+        slotDuration: 15,
+        dayStartHour: 5,
+        dayStartMinute: 0,
+        dayEndHour: 23,
+        dayEndMinute: 0,
+      };
+      const slots = generateTimeSlotsForNotification(timeSettings);
+      days[dateKey] = {
+        date: dateKey,
+        slots,
+        habits: [false, false, false, false, false],
+        habitCompletions: {},
+        todos: Array(5).fill(null).map(() => ({ text: '', completed: false })),
+        gratitude: ['', '', ''],
+        highlights: ['', '', '', '', ''],
+        sleepHours: null,
+        steps: null,
+      };
+      console.log(`[Notifications] Created new day data for ${dateKey} with ${slots.length} slots`);
     }
 
     const day = days[dateKey];
     if (slotIndex < 0 || slotIndex >= day.slots.length) {
-      console.log(`[Notifications] Slot index ${slotIndex} out of range for ${dateKey}`);
+      console.log(`[Notifications] Slot index ${slotIndex} out of range for ${dateKey} (max: ${day.slots.length})`);
       return false;
     }
 
@@ -451,10 +516,25 @@ export async function saveSlotDirectToStorage(
     days[dateKey] = day;
     await AsyncStorage.setItem(DAYS_KEY, JSON.stringify(days));
     console.log(`[Notifications] ✓ Direct storage save: ${activityCode} → slot ${slotIndex} on ${dateKey}`);
+
+    syncDaysToSupabaseFromNotification(days);
+
     return true;
   } catch (e) {
     console.error('[Notifications] Direct storage save failed:', e);
     return false;
+  }
+}
+
+async function syncDaysToSupabaseFromNotification(daysData: Record<string, any>): Promise<void> {
+  try {
+    const { debouncedUpsert, isSupabaseConfigured } = await import('../lib/supabase');
+    if (isSupabaseConfigured()) {
+      debouncedUpsert('days', daysData);
+      console.log('[Notifications] Triggered Supabase sync after direct save');
+    }
+  } catch (e) {
+    console.log('[Notifications] Supabase sync from notification failed:', e);
   }
 }
 
@@ -495,12 +575,16 @@ export function addNotificationResponseListener(
           console.log(`[Notifications] Direct save result: ${saved}`);
         }
 
-        await dismissAllNotificationsForSlot(slotMinutes);
-
         try {
-          await Notifications!.dismissNotificationAsync(notificationId);
+          await Notifications!.dismissAllNotificationsAsync();
+          console.log('[Notifications] Dismissed ALL notifications after action tap');
         } catch (e) {
-          console.log(`[Notifications] Fallback dismiss failed for ${notificationId}:`, e);
+          console.log('[Notifications] dismissAllNotificationsAsync failed:', e);
+          try {
+            await Notifications!.dismissNotificationAsync(notificationId);
+          } catch (e2) {
+            console.log(`[Notifications] Fallback dismiss also failed:`, e2);
+          }
         }
 
         handler({

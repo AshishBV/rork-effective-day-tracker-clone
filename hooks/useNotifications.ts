@@ -61,13 +61,10 @@ export function useNotifications() {
         return;
       }
 
-      updateSlot(targetSlotIndex, {
-        activityCategory: code,
-      }, todayKey);
+      console.log(`[Notifications] ✓ Logged ${code} (${activity.name}) for slot ${targetSlotIndex} on ${todayKey} | ER points: ${activity.erPoints}`);
+      console.log('[Notifications] Data was saved directly to AsyncStorage + Supabase by the response listener');
 
       queryClient.invalidateQueries({ queryKey: ['days'] });
-
-      console.log(`[Notifications] ✓ Logged ${code} (${activity.name}) for slot ${targetSlotIndex} on ${todayKey} | ER points: ${activity.erPoints}`);
 
       const followUpId = followUpIds.current.get(targetSlotIndex);
       if (followUpId) {
@@ -82,7 +79,7 @@ export function useNotifications() {
     const actionId = response?.actionIdentifier;
     const data = response?.notification?.request?.content?.data;
     console.log('[Notifications] Unhandled action:', actionId, data);
-  }, [updateSlot, timeSettings, getActivityByCode]);
+  }, [timeSettings, getActivityByCode, queryClient]);
 
   const scheduleFollowUpIfNeeded = useCallback(async () => {
     if (!settings.strictMode || Platform.OS === 'web') return;
@@ -190,6 +187,9 @@ export function useNotifications() {
 
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('[Notifications] App came to foreground — forcing data reload from AsyncStorage');
+        queryClient.invalidateQueries({ queryKey: ['days'] });
+
         debouncedReschedule();
 
         if (settings.strictMode) {
