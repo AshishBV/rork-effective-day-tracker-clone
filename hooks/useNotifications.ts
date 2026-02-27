@@ -19,6 +19,8 @@ export function useNotifications() {
   const appState = useRef(AppState.currentState);
   const followUpIds = useRef<Map<number, string>>(new Map());
   const hasRequestedPermission = useRef(false);
+  const hasScheduledInitial = useRef(false);
+  const rescheduleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const timeSettings = settings.timeSettings || DEFAULT_TIME_SETTINGS;
   const activityCodes = activeActivities.map(a => a.code);
@@ -169,12 +171,22 @@ export function useNotifications() {
     };
   }, [handleNotificationResponse]);
 
+  const debouncedReschedule = useCallback(() => {
+    if (rescheduleTimer.current) {
+      clearTimeout(rescheduleTimer.current);
+    }
+    rescheduleTimer.current = setTimeout(() => {
+      rescheduleNotifications();
+      rescheduleTimer.current = null;
+    }, 1000);
+  }, [rescheduleNotifications]);
+
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        rescheduleNotifications();
+        debouncedReschedule();
 
         if (settings.strictMode) {
           scheduleFollowUpIfNeeded();
@@ -185,12 +197,18 @@ export function useNotifications() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
-    rescheduleNotifications();
+    if (!hasScheduledInitial.current) {
+      hasScheduledInitial.current = true;
+      rescheduleNotifications();
+    }
 
     return () => {
       subscription.remove();
+      if (rescheduleTimer.current) {
+        clearTimeout(rescheduleTimer.current);
+      }
     };
-  }, [rescheduleNotifications, settings.strictMode, scheduleFollowUpIfNeeded]);
+  }, [rescheduleNotifications, debouncedReschedule, settings.strictMode, scheduleFollowUpIfNeeded]);
 
   useEffect(() => {
     if (settings.strictMode && Platform.OS !== 'web') {

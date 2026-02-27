@@ -11,6 +11,8 @@ const SCHEDULED_IDS_KEY = 'scheduled_notification_ids';
 const DAILY_REMINDER_ID_KEY = 'daily_reminder_notification_id';
 const PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
 
+let isSchedulingInProgress = false;
+
 async function initializeNotifications(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   if (Notifications !== null) return notificationsAvailable;
@@ -111,13 +113,25 @@ export async function cancelAllQuickLogNotifications(): Promise<void> {
     const available = await initializeNotifications();
     if (!available || !Notifications) return;
 
+    const allScheduled = await Notifications.getAllScheduledNotificationsAsync();
+    let cancelledCount = 0;
+    for (const notif of allScheduled) {
+      const type = notif.content?.data?.type;
+      if (type === 'quick_log') {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+        cancelledCount++;
+      }
+    }
+    console.log(`[Notifications] Cancelled ${cancelledCount} quick_log notifications (found ${allScheduled.length} total scheduled)`);
+
     const storedIds = await AsyncStorage.getItem(SCHEDULED_IDS_KEY);
     if (storedIds) {
       const ids: string[] = JSON.parse(storedIds);
       for (const id of ids) {
-        await Notifications.cancelScheduledNotificationAsync(id);
+        try {
+          await Notifications.cancelScheduledNotificationAsync(id);
+        } catch (_) {}
       }
-      console.log(`[Notifications] Cancelled ${ids.length} scheduled notifications`);
     }
     await AsyncStorage.setItem(SCHEDULED_IDS_KEY, JSON.stringify([]));
   } catch (error) {
@@ -141,6 +155,33 @@ export async function scheduleQuickLogNotifications(
     return;
   }
 
+  if (isSchedulingInProgress) {
+    console.log('[Notifications] Scheduling already in progress - skipping');
+    return;
+  }
+  isSchedulingInProgress = true;
+
+  try {
+    await _scheduleQuickLogNotificationsInner(
+      slotDuration, dayStartHour, dayStartMinute, dayEndHour, dayEndMinute,
+      quietStart, quietEnd, enabled, activityCodes
+    );
+  } finally {
+    isSchedulingInProgress = false;
+  }
+}
+
+async function _scheduleQuickLogNotificationsInner(
+  slotDuration: number,
+  dayStartHour: number,
+  dayStartMinute: number,
+  dayEndHour: number,
+  dayEndMinute: number,
+  quietStart: string,
+  quietEnd: string,
+  enabled: boolean,
+  activityCodes: string[]
+): Promise<void> {
   await cancelAllQuickLogNotifications();
 
   if (!enabled) {
@@ -171,7 +212,7 @@ export async function scheduleQuickLogNotifications(
   const startMinutes = dayStartHour * 60 + dayStartMinute;
   const endMinutes = dayEndHour * 60 + dayEndMinute;
 
-  const categoryActions = activityCodes.slice(0, 7).map(code => ({
+  const topActions = activityCodes.slice(0, 2).map(code => ({
     identifier: `LOG_${code}`,
     buttonTitle: code,
     options: {
@@ -180,10 +221,10 @@ export async function scheduleQuickLogNotifications(
   }));
 
   const actions = [
-    ...categoryActions,
+    ...topActions,
     {
-      identifier: 'SELECT_RANGE',
-      buttonTitle: 'Select Range',
+      identifier: 'MORE_ACTIVITIES',
+      buttonTitle: 'More...',
       options: {
         opensAppToForeground: true,
       },
@@ -350,6 +391,15 @@ export function addNotificationResponseListener(
 
       if (actionId === 'SELECT_RANGE') {
         console.log('[Notifications] Opening range log screen');
+        router.push('/range-log' as any);
+        return;
+      }
+
+      if (actionId === 'MORE_ACTIVITIES') {
+        const slotIndex = data?.slotIndex;
+        const timeIn = data?.timeIn;
+        const timeOut = data?.timeOut;
+        console.log(`[Notifications] Opening app for slot ${slotIndex} (${timeIn} - ${timeOut})`);
         router.push('/range-log' as any);
         return;
       }
