@@ -12,22 +12,37 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
   const { colors } = useTheme();
   const { sortedActivities, getActivityByCode } = useActivities();
 
-  const getActivityCellStyle = (code: string, hours: number) => {
-    const activity = getActivityByCode(code);
-    if (!activity) return { backgroundColor: 'transparent', textColor: colors.primaryText };
-    
-    const points = activity.points;
-    
-    if (points < 0 && hours > 1) {
-      return { backgroundColor: colors.error, textColor: '#FFFFFF' };
+  const getRowStatus = (code: string, hours: number): 'red' | 'green' | 'neutral' => {
+    const redCodes = ['I', 'TW', 'CA'];
+    if (redCodes.includes(code) && hours > 1) return 'red';
+
+    if (code === 'A' && hours >= 2) return 'green';
+    if ((code === 'P' || code === 'EC') && hours >= 1) return 'green';
+
+    return 'neutral';
+  };
+
+  const getRowStyles = (status: 'red' | 'green' | 'neutral') => {
+    switch (status) {
+      case 'red':
+        return {
+          rowBg: 'rgba(220, 38, 38, 0.10)',
+          indicatorColor: '#DC2626',
+          textColor: colors.primaryText,
+        };
+      case 'green':
+        return {
+          rowBg: 'rgba(22, 163, 74, 0.10)',
+          indicatorColor: '#16A34A',
+          textColor: colors.primaryText,
+        };
+      default:
+        return {
+          rowBg: 'transparent',
+          indicatorColor: 'transparent',
+          textColor: colors.primaryText,
+        };
     }
-    if (points >= 2 && hours >= 2) {
-      return { backgroundColor: colors.success, textColor: '#FFFFFF' };
-    }
-    if (points > 0 && hours >= 1) {
-      return { backgroundColor: colors.success, textColor: '#FFFFFF' };
-    }
-    return { backgroundColor: 'transparent', textColor: colors.primaryText };
   };
 
   const styles = useMemo(() => StyleSheet.create({
@@ -67,6 +82,11 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
       flexDirection: 'row',
       borderTopWidth: 1,
       borderTopColor: colors.divider,
+    },
+    statusIndicator: {
+      width: 3,
+      borderRadius: 2,
+      marginRight: 0,
     },
     cell: {
       paddingVertical: 10,
@@ -122,22 +142,20 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
         </View>
         {activitiesWithHours.map((activity) => {
           const hours = hoursPerCategory[activity.code] || 0;
-          const cellStyle = getActivityCellStyle(activity.code, hours);
+          const status = getRowStatus(activity.code, hours);
+          const rowStyle = getRowStyles(status);
           
           return (
-            <View key={activity.id} style={styles.row}>
-              <View style={[
-                styles.cell, 
-                styles.activityCell,
-                { backgroundColor: cellStyle.backgroundColor }
-              ]}>
+            <View key={activity.id} style={[styles.row, { backgroundColor: rowStyle.rowBg }]}>
+              <View style={[styles.statusIndicator, { backgroundColor: rowStyle.indicatorColor }]} />
+              <View style={[styles.cell, styles.activityCell]}>
                 <View style={[styles.colorDot, { backgroundColor: activity.color }]} />
-                <Text style={[styles.activityText, { color: cellStyle.textColor }]}>
+                <Text style={[styles.activityText, { color: rowStyle.textColor }]}>
                   {activity.name}
                 </Text>
               </View>
               <View style={[styles.cell, styles.hoursCell]}>
-                <Text style={styles.hoursText}>{hours.toFixed(2)}</Text>
+                <Text style={[styles.hoursText, { color: rowStyle.textColor }]}>{hours.toFixed(2)}</Text>
               </View>
             </View>
           );
