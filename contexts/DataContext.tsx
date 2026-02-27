@@ -1,10 +1,12 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { DayData, Settings, DEFAULT_SETTINGS, DEFAULT_HABITS, Habit, DEFAULT_TIME_SETTINGS, TimeSlot } from '../types/data';
 import { generateTimeSlots, getDateKey, calculateDayER, calculateTotalSlots, mergeSlotsByTime } from '../utils/timeUtils';
 import { fetchAppData, isSupabaseConfigured, debouncedUpsert, getLocalSyncTimestamp } from '../lib/supabase';
+import { notificationEvents } from '../utils/notificationEvents';
 
 const DAYS_STORAGE_KEY = 'effective_day_tracker_days';
 const SETTINGS_STORAGE_KEY = 'effective_day_tracker_settings';
@@ -27,6 +29,43 @@ function createEmptyDay(dateKey: string, settings?: Settings): DayData {
 export const [DataProvider, useData] = createContextHook(() => {
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(() => getDateKey(new Date()));
+
+  useEffect(() => {
+    const unsubscribe = notificationEvents.addListener(() => {
+      console.log('[DataContext] Notification event received — reloading days from AsyncStorage');
+      AsyncStorage.getItem(DAYS_STORAGE_KEY).then((stored) => {
+        if (stored) {
+          const freshData = JSON.parse(stored) as Record<string, DayData>;
+          queryClient.setQueryData(['days'], freshData);
+          console.log('[DataContext] Days data refreshed from AsyncStorage after notification action');
+        }
+      }).catch((e) => {
+        console.log('[DataContext] Failed to reload days after notification:', e);
+      });
+    });
+
+    return unsubscribe;
+  }, [queryClient]);
+
+  useEffect(() => {
+    const handleAppState = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        console.log('[DataContext] App foregrounded — refreshing days from AsyncStorage');
+        AsyncStorage.getItem(DAYS_STORAGE_KEY).then((stored) => {
+          if (stored) {
+            const freshData = JSON.parse(stored) as Record<string, DayData>;
+            queryClient.setQueryData(['days'], freshData);
+          }
+        }).catch((e) => {
+          console.log('[DataContext] Foreground refresh failed:', e);
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, [queryClient]);
+
   const daysQuery = useQuery({
     queryKey: ['days'],
     queryFn: async () => {

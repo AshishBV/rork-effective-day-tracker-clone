@@ -1,19 +1,21 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useMemo } from 'react';
-import { GestureHandlerRootView, gestureHandlerRootHOC } from 'react-native-gesture-handler';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DataProvider } from '../contexts/DataContext';
 import { ActivitiesProvider } from '../contexts/ActivitiesContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { initializeRootNotificationListener } from '../utils/notifications';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-function NotificationHandler() {
+function NotificationScheduler() {
   useNotifications();
   return null;
 }
@@ -48,7 +50,7 @@ function ThemedApp() {
   return (
     <NavigationThemeProvider value={navigationTheme}>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-        <NotificationHandler />
+        <NotificationScheduler />
         <Stack
           screenOptions={{
             headerBackTitle: 'Back',
@@ -89,8 +91,29 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const cleanupRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     SplashScreen.hideAsync();
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    console.log('[RootLayout] Initializing root notification listener');
+    initializeRootNotificationListener().then((cleanup) => {
+      if (cleanup) {
+        cleanupRef.current = cleanup;
+        console.log('[RootLayout] Root notification listener initialized successfully');
+      }
+    });
+
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
   }, []);
 
   return (

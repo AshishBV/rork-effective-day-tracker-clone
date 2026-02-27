@@ -1,21 +1,25 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { notificationEvents } from './notificationEvents';
 
 let Notifications: typeof import('expo-notifications') | null = null;
-let notificationsAvailable = false;
+let notificationsReady = false;
+let responseListenerActive = false;
 
 const QUICK_LOG_CHANNEL_ID = 'quick-log-reminders';
 const DAILY_REMINDER_CHANNEL_ID = 'daily-reminder';
 const SCHEDULED_IDS_KEY = 'scheduled_notification_ids';
 const DAILY_REMINDER_ID_KEY = 'daily_reminder_notification_id';
 const PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
+const DAYS_STORAGE_KEY = 'effective_day_tracker_days';
+const SETTINGS_STORAGE_KEY = 'effective_day_tracker_settings';
 
 let isSchedulingInProgress = false;
 
-async function initializeNotifications(): Promise<boolean> {
+async function loadNotificationsModule(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
-  if (Notifications !== null) return notificationsAvailable;
+  if (Notifications !== null) return notificationsReady;
 
   try {
     Notifications = await import('expo-notifications');
@@ -29,19 +33,227 @@ async function initializeNotifications(): Promise<boolean> {
         priority: Notifications!.AndroidNotificationPriority.HIGH,
       }),
     });
-    notificationsAvailable = true;
-    console.log('[Notifications] Module loaded successfully');
+    notificationsReady = true;
+    console.log('[Notifications] Module loaded');
     return true;
   } catch (error) {
     console.log('[Notifications] Module not available:', error);
-    notificationsAvailable = false;
+    notificationsReady = false;
     return false;
   }
 }
 
+function getTodayDateKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function generateTimeSlotsForDay(timeSettings: {
+  slotDuration: number;
+  dayStartHour: number;
+  dayStartMinute: number;
+  dayEndHour: number;
+  dayEndMinute: number;
+}): Array<{
+  index: number;
+  timeIn: string;
+  timeOut: string;
+  activityCategory: string | null;
+  plannedCategory: string | null;
+  performedActivityText: string;
+  pointsOverride: number | null;
+}> {
+  const slots: Array<{
+    index: number;
+    timeIn: string;
+    timeOut: string;
+    activityCategory: string | null;
+    plannedCategory: string | null;
+    performedActivityText: string;
+    pointsOverride: number | null;
+  }> = [];
+  const startMinutes = timeSettings.dayStartHour * 60 + timeSettings.dayStartMinute;
+  const endMinutes = timeSettings.dayEndHour * 60 + timeSettings.dayEndMinute;
+  let idx = 0;
+  for (let m = startMinutes; m < endMinutes; m += timeSettings.slotDuration) {
+    const endM = m + timeSettings.slotDuration;
+    const timeIn = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;
+    const timeOut = `${Math.floor(endM / 60).toString().padStart(2, '0')}:${(endM % 60).toString().padStart(2, '0')}`;
+    slots.push({
+      index: idx,
+      timeIn,
+      timeOut,
+      activityCategory: null,
+      plannedCategory: null,
+      performedActivityText: '',
+      pointsOverride: null,
+    });
+    idx++;
+  }
+  return slots;
+}
+
+async function getTimeSettings(): Promise<{
+  slotDuration: number;
+  dayStartHour: number;
+  dayStartMinute: number;
+  dayEndHour: number;
+  dayEndMinute: number;
+}> {
+  try {
+    const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (stored) {
+      const settings = JSON.parse(stored);
+      if (settings?.timeSettings) {
+        return settings.timeSettings;
+      }
+    }
+  } catch (e) {
+    console.log('[Notifications] Could not read time settings:', e);
+  }
+  return {
+    slotDuration: 15,
+    dayStartHour: 5,
+    dayStartMinute: 0,
+    dayEndHour: 23,
+    dayEndMinute: 0,
+  };
+}
+
+async function saveSlotToStorage(dateKey: string, slotIndex: number, activityCode: string): Promise<boolean> {
+  try {
+    console.log(`[Notifications] saveSlotToStorage: date=${dateKey}, slot=${slotIndex}, activity=${activityCode}`);
+    const stored = await AsyncStorage.getItem(DAYS_STORAGE_KEY);
+    const days: Record<string, any> = stored ? JSON.parse(stored) : {};
+
+    if (!days[dateKey]) {
+      const timeSettings = await getTimeSettings();
+      const slots = generateTimeSlotsForDay(timeSettings);
+      days[dateKey] = {
+        date: dateKey,
+        slots,
+        habits: [false, false, false, false, false],
+        habitCompletions: {},
+        todos: Array(5).fill(null).map(() => ({ text: '', completed: false })),
+        gratitude: ['', '', ''],
+        highlights: ['', '', '', '', ''],
+        sleepHours: null,
+        steps: null,
+      };
+      console.log(`[Notifications] Created new day for ${dateKey} with ${slots.length} slots`);
+    }
+
+    const day = days[dateKey];
+    if (slotIndex < 0 || slotIndex >= day.slots.length) {
+      console.log(`[Notifications] Slot index ${slotIndex} out of range (max: ${day.slots.length - 1})`);
+      return false;
+    }
+
+    day.slots[slotIndex] = {
+      ...day.slots[slotIndex],
+      activityCategory: activityCode,
+    };
+    days[dateKey] = day;
+
+    await AsyncStorage.setItem(DAYS_STORAGE_KEY, JSON.stringify(days));
+    console.log(`[Notifications] Saved ${activityCode} to slot ${slotIndex} on ${dateKey}`);
+
+    try {
+      const { debouncedUpsert, isSupabaseConfigured } = await import('../lib/supabase');
+      if (isSupabaseConfigured()) {
+        debouncedUpsert('days', days);
+        console.log('[Notifications] Triggered Supabase sync');
+      }
+    } catch (e) {
+      console.log('[Notifications] Supabase sync failed (non-critical):', e);
+    }
+
+    return true;
+  } catch (e) {
+    console.error('[Notifications] saveSlotToStorage failed:', e);
+    return false;
+  }
+}
+
+export async function initializeRootNotificationListener(): Promise<(() => void) | null> {
+  if (Platform.OS === 'web') return null;
+  if (responseListenerActive) {
+    console.log('[Notifications] Root listener already active, skipping');
+    return null;
+  }
+
+  const available = await loadNotificationsModule();
+  if (!available || !Notifications) {
+    console.log('[Notifications] Cannot init root listener - module unavailable');
+    return null;
+  }
+
+  responseListenerActive = true;
+  console.log('[Notifications] Setting up ROOT notification response listener');
+
+  const subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
+    const actionId = response.actionIdentifier;
+    const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+
+    console.log('[Notifications] ROOT handler received action:', actionId);
+    console.log('[Notifications] ROOT handler data:', JSON.stringify(data));
+
+    if (actionId === 'SELECT_RANGE') {
+      console.log('[Notifications] Opening range-log screen');
+      try {
+        router.push('/range-log' as any);
+      } catch (e) {
+        console.log('[Notifications] Could not navigate to range-log:', e);
+      }
+      return;
+    }
+
+    if (actionId.startsWith('LOG_')) {
+      const activityCode = actionId.replace('LOG_', '');
+      const slotIndex = data?.slotIndex as number | undefined;
+      const dateFromData = data?.date as string | undefined;
+      const dateKey = dateFromData || getTodayDateKey();
+
+      console.log(`[Notifications] Action LOG: code=${activityCode}, slot=${slotIndex}, date=${dateKey}`);
+
+      if (typeof slotIndex === 'number') {
+        const saved = await saveSlotToStorage(dateKey, slotIndex, activityCode);
+        console.log(`[Notifications] Save result: ${saved}`);
+
+        notificationEvents.emit();
+      } else {
+        console.log('[Notifications] No slotIndex in notification data, cannot save');
+      }
+
+      try {
+        await Notifications!.dismissAllNotificationsAsync();
+        console.log('[Notifications] Dismissed all notifications after action');
+      } catch (e) {
+        console.log('[Notifications] dismissAllNotificationsAsync error:', e);
+      }
+      return;
+    }
+
+    if (Notifications && actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+      console.log('[Notifications] Default tap (opened app from notification)');
+      return;
+    }
+
+    console.log('[Notifications] Unhandled action:', actionId);
+  });
+
+  console.log('[Notifications] ROOT listener active');
+
+  return () => {
+    responseListenerActive = false;
+    subscription.remove();
+    console.log('[Notifications] ROOT listener removed');
+  };
+}
+
 export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS === 'web') return;
-  const available = await initializeNotifications();
+  const available = await loadNotificationsModule();
   if (!available || !Notifications) return;
 
   if (Platform.OS === 'android') {
@@ -65,16 +277,10 @@ export async function setupNotificationChannels(): Promise<void> {
 }
 
 export async function requestPermissions(): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    console.log('[Notifications] Web platform - skipping permission request');
-    return false;
-  }
+  if (Platform.OS === 'web') return false;
 
-  const available = await initializeNotifications();
-  if (!available || !Notifications) {
-    console.log('[Notifications] Module not available - skipping permission request');
-    return false;
-  }
+  const available = await loadNotificationsModule();
+  if (!available || !Notifications) return false;
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -97,20 +303,15 @@ export async function requestPermissionsOnFirstLaunch(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
 
   const alreadyRequested = await AsyncStorage.getItem(PERMISSION_REQUESTED_KEY);
-  if (alreadyRequested === 'true') {
-    console.log('[Notifications] Permission already requested on first launch');
-    return false;
-  }
+  if (alreadyRequested === 'true') return false;
 
   await AsyncStorage.setItem(PERMISSION_REQUESTED_KEY, 'true');
-  const granted = await requestPermissions();
-  console.log(`[Notifications] First launch permission request: ${granted ? 'granted' : 'denied'}`);
-  return granted;
+  return await requestPermissions();
 }
 
 export async function cancelAllQuickLogNotifications(): Promise<void> {
   try {
-    const available = await initializeNotifications();
+    const available = await loadNotificationsModule();
     if (!available || !Notifications) return;
 
     const allScheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -122,7 +323,7 @@ export async function cancelAllQuickLogNotifications(): Promise<void> {
         cancelledCount++;
       }
     }
-    console.log(`[Notifications] Cancelled ${cancelledCount} quick_log notifications (found ${allScheduled.length} total scheduled)`);
+    console.log(`[Notifications] Cancelled ${cancelledCount} quick_log notifications`);
 
     const storedIds = await AsyncStorage.getItem(SCHEDULED_IDS_KEY);
     if (storedIds) {
@@ -150,181 +351,143 @@ export async function scheduleQuickLogNotifications(
   enabled: boolean,
   activityCodes: string[]
 ): Promise<void> {
-  if (Platform.OS === 'web') {
-    console.log('[Notifications] Web platform - skipping scheduling');
-    return;
-  }
+  if (Platform.OS === 'web') return;
 
   if (isSchedulingInProgress) {
-    console.log('[Notifications] Scheduling already in progress - skipping');
+    console.log('[Notifications] Scheduling already in progress');
     return;
   }
   isSchedulingInProgress = true;
 
   try {
-    await _scheduleQuickLogNotificationsInner(
-      slotDuration, dayStartHour, dayStartMinute, dayEndHour, dayEndMinute,
-      quietStart, quietEnd, enabled, activityCodes
-    );
+    await cancelAllQuickLogNotifications();
+
+    if (!enabled) {
+      console.log('[Notifications] Notifications disabled');
+      return;
+    }
+
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    if (!Notifications) return;
+
+    await setupNotificationChannels();
+
+    const [quietStartHour, quietStartMin] = quietStart.split(':').map(Number);
+    const [quietEndHour, quietEndMin] = quietEnd.split(':').map(Number);
+    const quietStartMinutes = quietStartHour * 60 + quietStartMin;
+    const quietEndMinutes = quietEndHour * 60 + quietEndMin;
+
+    const scheduledIds: string[] = [];
+    const now = new Date();
+    const todayDateKey = getTodayDateKey();
+    const startMinutes = dayStartHour * 60 + dayStartMinute;
+    const endMinutes = dayEndHour * 60 + dayEndMinute;
+
+    const group1Codes = activityCodes.slice(0, 3);
+    const group2Codes = activityCodes.slice(3);
+
+    const group1Actions = group1Codes.map(code => ({
+      identifier: `LOG_${code}`,
+      buttonTitle: code,
+      options: { opensAppToForeground: false },
+    }));
+
+    const group2Actions = group2Codes.map(code => ({
+      identifier: `LOG_${code}`,
+      buttonTitle: code,
+      options: { opensAppToForeground: false },
+    }));
+
+    await Notifications.setNotificationCategoryAsync('QUICK_LOG_1', group1Actions);
+    await Notifications.setNotificationCategoryAsync('QUICK_LOG_2', group2Actions);
+    console.log('[Notifications] Categories: QUICK_LOG_1=[' + group1Codes.join(',') + '], QUICK_LOG_2=[' + group2Codes.join(',') + ']');
+
+    for (let minutes = startMinutes; minutes < endMinutes; minutes += slotDuration) {
+      const isInQuietHours = quietEndMinutes < quietStartMinutes
+        ? (minutes >= quietStartMinutes || minutes < quietEndMinutes)
+        : (minutes >= quietStartMinutes && minutes < quietEndMinutes);
+
+      if (isInQuietHours) continue;
+
+      const slotHour = Math.floor(minutes / 60);
+      const slotMinute = minutes % 60;
+      const slotEndMinutes = minutes + slotDuration;
+      const slotEndHour = Math.floor(slotEndMinutes / 60);
+      const slotEndMin = slotEndMinutes % 60;
+
+      const timeIn = `${slotHour.toString().padStart(2, '0')}:${slotMinute.toString().padStart(2, '0')}`;
+      const timeOut = `${slotEndHour.toString().padStart(2, '0')}:${slotEndMin.toString().padStart(2, '0')}`;
+      const slotIndex = Math.floor((minutes - startMinutes) / slotDuration);
+
+      const triggerDate = new Date(now);
+      triggerDate.setHours(slotHour, slotMinute, 0, 0);
+      if (triggerDate <= now) {
+        triggerDate.setDate(triggerDate.getDate() + 1);
+      }
+
+      const commonData = {
+        type: 'quick_log' as const,
+        timeIn,
+        timeOut,
+        slotMinutes: minutes,
+        slotIndex,
+        date: todayDateKey,
+      };
+
+      try {
+        const id1 = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `Log: ${group1Codes.join(', ')}`,
+            body: `${timeIn} → ${timeOut}`,
+            data: { ...commonData, group: 1 },
+            categoryIdentifier: 'QUICK_LOG_1',
+            sound: 'default',
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DAILY,
+            hour: slotHour,
+            minute: slotMinute,
+          },
+        });
+        scheduledIds.push(id1);
+
+        const id2 = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `Log: ${group2Codes.join(', ')}`,
+            body: `${timeIn} → ${timeOut}`,
+            data: { ...commonData, group: 2 },
+            categoryIdentifier: 'QUICK_LOG_2',
+            sound: undefined,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DAILY,
+            hour: slotHour,
+            minute: slotMinute,
+          },
+        });
+        scheduledIds.push(id2);
+      } catch (error) {
+        console.error(`[Notifications] Failed to schedule for ${timeIn}:`, error);
+      }
+    }
+
+    await AsyncStorage.setItem(SCHEDULED_IDS_KEY, JSON.stringify(scheduledIds));
+    console.log(`[Notifications] Scheduled ${scheduledIds.length} notifications`);
   } finally {
     isSchedulingInProgress = false;
   }
 }
 
-async function _scheduleQuickLogNotificationsInner(
-  slotDuration: number,
-  dayStartHour: number,
-  dayStartMinute: number,
-  dayEndHour: number,
-  dayEndMinute: number,
-  quietStart: string,
-  quietEnd: string,
-  enabled: boolean,
-  activityCodes: string[]
-): Promise<void> {
-  await cancelAllQuickLogNotifications();
-
-  if (!enabled) {
-    console.log('[Notifications] Notifications disabled - not scheduling');
-    return;
-  }
-
-  const hasPermission = await requestPermissions();
-  if (!hasPermission) {
-    console.log('[Notifications] No permission - not scheduling');
-    return;
-  }
-
-  if (!Notifications) {
-    console.log('[Notifications] Module not available - cannot schedule');
-    return;
-  }
-
-  await setupNotificationChannels();
-
-  const [quietStartHour, quietStartMin] = quietStart.split(':').map(Number);
-  const [quietEndHour, quietEndMin] = quietEnd.split(':').map(Number);
-  const quietStartMinutes = quietStartHour * 60 + quietStartMin;
-  const quietEndMinutes = quietEndHour * 60 + quietEndMin;
-
-  const scheduledIds: string[] = [];
-  const now = new Date();
-  const startMinutes = dayStartHour * 60 + dayStartMinute;
-  const endMinutes = dayEndHour * 60 + dayEndMinute;
-
-  const group1Codes = activityCodes.slice(0, 3);
-  const group2Codes = activityCodes.slice(3);
-
-  const group1Actions = group1Codes.map(code => ({
-    identifier: `LOG_${code}`,
-    buttonTitle: code,
-    options: {
-      opensAppToForeground: false,
-    },
-  }));
-
-  const group2Actions = group2Codes.map(code => ({
-    identifier: `LOG_${code}`,
-    buttonTitle: code,
-    options: {
-      opensAppToForeground: false,
-    },
-  }));
-
-  await Notifications.setNotificationCategoryAsync('QUICK_LOG_1', group1Actions);
-  await Notifications.setNotificationCategoryAsync('QUICK_LOG_2', group2Actions);
-  console.log('[Notifications] Set QUICK_LOG_1 category with actions:', group1Actions.map(a => a.identifier).join(', '));
-  console.log('[Notifications] Set QUICK_LOG_2 category with actions:', group2Actions.map(a => a.identifier).join(', '));
-
-  for (let minutes = startMinutes; minutes < endMinutes; minutes += slotDuration) {
-    const isInQuietHours = quietEndMinutes < quietStartMinutes
-      ? (minutes >= quietStartMinutes || minutes < quietEndMinutes)
-      : (minutes >= quietStartMinutes && minutes < quietEndMinutes);
-
-    if (isInQuietHours) continue;
-
-    const slotHour = Math.floor(minutes / 60);
-    const slotMinute = minutes % 60;
-    const slotEndMinutes = minutes + slotDuration;
-    const slotEndHour = Math.floor(slotEndMinutes / 60);
-    const slotEndMin = slotEndMinutes % 60;
-
-    const timeIn = `${slotHour.toString().padStart(2, '0')}:${slotMinute.toString().padStart(2, '0')}`;
-    const timeOut = `${slotEndHour.toString().padStart(2, '0')}:${slotEndMin.toString().padStart(2, '0')}`;
-
-    const slotIndex = Math.floor((minutes - startMinutes) / slotDuration);
-
-    const triggerDate = new Date(now);
-    triggerDate.setHours(slotHour, slotMinute, 0, 0);
-
-    if (triggerDate <= now) {
-      triggerDate.setDate(triggerDate.getDate() + 1);
-    }
-
-    try {
-      const id1 = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `Log: ${group1Codes.join(', ')}`,
-          body: `${timeIn} → ${timeOut}`,
-          data: {
-            type: 'quick_log',
-            timeIn,
-            timeOut,
-            slotMinutes: minutes,
-            slotIndex,
-            group: 1,
-          },
-          categoryIdentifier: 'QUICK_LOG_1',
-          sound: 'default',
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: slotHour,
-          minute: slotMinute,
-        },
-      });
-      scheduledIds.push(id1);
-
-      const id2 = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `Log: ${group2Codes.join(', ')}`,
-          body: `${timeIn} → ${timeOut}`,
-          data: {
-            type: 'quick_log',
-            timeIn,
-            timeOut,
-            slotMinutes: minutes,
-            slotIndex,
-            group: 2,
-          },
-          categoryIdentifier: 'QUICK_LOG_2',
-          sound: undefined,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: slotHour,
-          minute: slotMinute,
-        },
-      });
-      scheduledIds.push(id2);
-    } catch (error) {
-      console.error(`[Notifications] Failed to schedule for ${timeIn}:`, error);
-    }
-  }
-
-  await AsyncStorage.setItem(SCHEDULED_IDS_KEY, JSON.stringify(scheduledIds));
-  console.log(`[Notifications] Scheduled ${scheduledIds.length} quick log notifications (${slotDuration}min slots)`);
-}
-
 async function cancelDailyReminder(): Promise<void> {
   try {
-    const available = await initializeNotifications();
+    const available = await loadNotificationsModule();
     if (!available || !Notifications) return;
     const storedId = await AsyncStorage.getItem(DAILY_REMINDER_ID_KEY);
     if (storedId) {
       await Notifications.cancelScheduledNotificationAsync(storedId);
       await AsyncStorage.removeItem(DAILY_REMINDER_ID_KEY);
-      console.log('[Notifications] Cancelled daily reminder');
     }
   } catch (error) {
     console.error('[Notifications] Error cancelling daily reminder:', error);
@@ -338,15 +501,12 @@ export async function scheduleDailyReminderNotification(
 ): Promise<void> {
   if (Platform.OS === 'web') return;
 
-  const available = await initializeNotifications();
+  const available = await loadNotificationsModule();
   if (!available || !Notifications) return;
 
   await cancelDailyReminder();
 
-  if (!enabled) {
-    console.log('[Notifications] Daily reminder disabled');
-    return;
-  }
+  if (!enabled) return;
 
   const hasPermission = await requestPermissions();
   if (!hasPermission) return;
@@ -358,12 +518,8 @@ export async function scheduleDailyReminderNotification(
     body = 'All done for today. Great job!';
   } else {
     const parts: string[] = [];
-    if (pendingHabits.length > 0) {
-      parts.push(`Habits: ${pendingHabits.join(', ')}`);
-    }
-    if (pendingTodos.length > 0) {
-      parts.push(`To-dos: ${pendingTodos.join(', ')}`);
-    }
+    if (pendingHabits.length > 0) parts.push(`Habits: ${pendingHabits.join(', ')}`);
+    if (pendingTodos.length > 0) parts.push(`To-dos: ${pendingTodos.join(', ')}`);
     body = parts.join('\n');
   }
 
@@ -382,7 +538,7 @@ export async function scheduleDailyReminderNotification(
       },
     });
     await AsyncStorage.setItem(DAILY_REMINDER_ID_KEY, id);
-    console.log('[Notifications] Daily reminder scheduled for 8 PM');
+    console.log('[Notifications] Daily reminder scheduled');
   } catch (error) {
     console.error('[Notifications] Failed to schedule daily reminder:', error);
   }
@@ -391,231 +547,12 @@ export async function scheduleDailyReminderNotification(
 export async function cancelNotification(id: string): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
-    const available = await initializeNotifications();
+    const available = await loadNotificationsModule();
     if (!available || !Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(id);
   } catch (error) {
     console.error('[Notifications] Failed to cancel notification:', error);
   }
-}
-
-async function dismissAllNotificationsForSlot(slotMinutes: number | undefined): Promise<void> {
-  if (!Notifications || slotMinutes === undefined) return;
-
-  try {
-    const presented = await Notifications.getPresentedNotificationsAsync();
-    let dismissedCount = 0;
-    for (const notif of presented) {
-      const notifData = notif.request?.content?.data;
-      if (notifData?.type === 'quick_log' && notifData?.slotMinutes === slotMinutes) {
-        try {
-          await Notifications.dismissNotificationAsync(notif.request.identifier);
-          dismissedCount++;
-        } catch (e) {
-          console.log(`[Notifications] Could not dismiss ${notif.request.identifier}:`, e);
-        }
-      }
-    }
-    console.log(`[Notifications] Dismissed ${dismissedCount} notifications for slotMinutes=${slotMinutes}`);
-  } catch (e) {
-    console.log('[Notifications] Error dismissing slot notifications:', e);
-  }
-}
-
-function generateTimeSlotsForNotification(timeSettings: { slotDuration: number; dayStartHour: number; dayStartMinute: number; dayEndHour: number; dayEndMinute: number }): any[] {
-  const slots: any[] = [];
-  const startMinutes = timeSettings.dayStartHour * 60 + timeSettings.dayStartMinute;
-  const endMinutes = timeSettings.dayEndHour * 60 + timeSettings.dayEndMinute;
-  let idx = 0;
-  for (let m = startMinutes; m < endMinutes; m += timeSettings.slotDuration) {
-    const endM = m + timeSettings.slotDuration;
-    const timeIn = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;
-    const timeOut = `${Math.floor(endM / 60).toString().padStart(2, '0')}:${(endM % 60).toString().padStart(2, '0')}`;
-    slots.push({
-      index: idx,
-      timeIn,
-      timeOut,
-      activityCategory: null,
-      plannedCategory: null,
-      performedActivityText: '',
-      pointsOverride: null,
-    });
-    idx++;
-  }
-  return slots;
-}
-
-function createEmptyDayForNotification(dateKey: string): any {
-  const slots = generateTimeSlotsForNotification({
-    slotDuration: 15,
-    dayStartHour: 5,
-    dayStartMinute: 0,
-    dayEndHour: 23,
-    dayEndMinute: 0,
-  });
-  return {
-    date: dateKey,
-    slots,
-    habits: [false, false, false, false, false],
-    habitCompletions: {},
-    todos: Array(5).fill(null).map(() => ({ text: '', completed: false })),
-    gratitude: ['', '', ''],
-    highlights: ['', '', '', '', ''],
-    sleepHours: null,
-    steps: null,
-  };
-}
-
-export async function saveSlotDirectToStorage(
-  slotIndex: number,
-  activityCode: string,
-  dateKey: string
-): Promise<boolean> {
-  try {
-    const DAYS_KEY = 'effective_day_tracker_days';
-    const SETTINGS_KEY = 'effective_day_tracker_settings';
-    const stored = await AsyncStorage.getItem(DAYS_KEY);
-    const days = stored ? JSON.parse(stored) : {};
-
-    if (!days[dateKey]) {
-      const settingsStored = await AsyncStorage.getItem(SETTINGS_KEY);
-      const settings = settingsStored ? JSON.parse(settingsStored) : null;
-      const timeSettings = settings?.timeSettings || {
-        slotDuration: 15,
-        dayStartHour: 5,
-        dayStartMinute: 0,
-        dayEndHour: 23,
-        dayEndMinute: 0,
-      };
-      const slots = generateTimeSlotsForNotification(timeSettings);
-      days[dateKey] = {
-        date: dateKey,
-        slots,
-        habits: [false, false, false, false, false],
-        habitCompletions: {},
-        todos: Array(5).fill(null).map(() => ({ text: '', completed: false })),
-        gratitude: ['', '', ''],
-        highlights: ['', '', '', '', ''],
-        sleepHours: null,
-        steps: null,
-      };
-      console.log(`[Notifications] Created new day data for ${dateKey} with ${slots.length} slots`);
-    }
-
-    const day = days[dateKey];
-    if (slotIndex < 0 || slotIndex >= day.slots.length) {
-      console.log(`[Notifications] Slot index ${slotIndex} out of range for ${dateKey} (max: ${day.slots.length})`);
-      return false;
-    }
-
-    day.slots[slotIndex] = {
-      ...day.slots[slotIndex],
-      activityCategory: activityCode,
-    };
-
-    days[dateKey] = day;
-    await AsyncStorage.setItem(DAYS_KEY, JSON.stringify(days));
-    console.log(`[Notifications] ✓ Direct storage save: ${activityCode} → slot ${slotIndex} on ${dateKey}`);
-
-    syncDaysToSupabaseFromNotification(days);
-
-    return true;
-  } catch (e) {
-    console.error('[Notifications] Direct storage save failed:', e);
-    return false;
-  }
-}
-
-async function syncDaysToSupabaseFromNotification(daysData: Record<string, any>): Promise<void> {
-  try {
-    const { debouncedUpsert, isSupabaseConfigured } = await import('../lib/supabase');
-    if (isSupabaseConfigured()) {
-      debouncedUpsert('days', daysData);
-      console.log('[Notifications] Triggered Supabase sync after direct save');
-    }
-  } catch (e) {
-    console.log('[Notifications] Supabase sync from notification failed:', e);
-  }
-}
-
-export function addNotificationResponseListener(
-  handler: (response: any) => void
-): { remove: () => void } | null {
-  if (Platform.OS === 'web') return null;
-
-  let subscription: { remove: () => void } | null = null;
-
-  initializeNotifications().then((available) => {
-    if (!available || !Notifications) return;
-
-    subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
-      const actionId = response.actionIdentifier;
-      const data = response.notification.request.content.data;
-
-      console.log('[Notifications] Response received:', actionId, JSON.stringify(data));
-
-      if (actionId === 'SELECT_RANGE') {
-        console.log('[Notifications] Opening range log screen');
-        router.push('/range-log' as any);
-        return;
-      }
-
-      if (actionId.startsWith('LOG_')) {
-        const activityCode = actionId.replace('LOG_', '');
-        const notificationId = response.notification.request.identifier;
-        const slotMinutes = data?.slotMinutes as number | undefined;
-        const slotIndex = data?.slotIndex as number | undefined;
-        console.log(`[Notifications] Quick log action: ${activityCode}, slotIndex: ${slotIndex}, slotMinutes: ${slotMinutes}, notificationId: ${notificationId}`);
-
-        const now = new Date();
-        const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-        if (typeof slotIndex === 'number') {
-          const saved = await saveSlotDirectToStorage(slotIndex, activityCode, dateKey);
-          console.log(`[Notifications] Direct save result: ${saved}`);
-        }
-
-        try {
-          await Notifications!.dismissAllNotificationsAsync();
-          console.log('[Notifications] Dismissed ALL notifications after action tap');
-        } catch (e) {
-          console.log('[Notifications] dismissAllNotificationsAsync failed:', e);
-          try {
-            await Notifications!.dismissNotificationAsync(notificationId);
-          } catch (e2) {
-            console.log(`[Notifications] Fallback dismiss also failed:`, e2);
-          }
-        }
-
-        handler({
-          ...response,
-          _parsedAction: {
-            type: 'quick_log',
-            activityCode,
-            slotIndex,
-            timeIn: data?.timeIn,
-            timeOut: data?.timeOut,
-            slotMinutes,
-          },
-        });
-        return;
-      }
-
-      if (actionId === Notifications!.DEFAULT_ACTION_IDENTIFIER) {
-        console.log('[Notifications] Default tap action, data:', data);
-        handler(response);
-        return;
-      }
-
-      handler(response);
-    });
-  });
-
-  return {
-    remove: () => {
-      subscription?.remove();
-    },
-  };
 }
 
 export async function scheduleStrictModeFollowUp(
@@ -625,9 +562,7 @@ export async function scheduleStrictModeFollowUp(
   if (Platform.OS === 'web') return null;
 
   const hasPermission = await requestPermissions();
-  if (!hasPermission) return null;
-
-  if (!Notifications) return null;
+  if (!hasPermission || !Notifications) return null;
 
   try {
     const id = await Notifications.scheduleNotificationAsync({

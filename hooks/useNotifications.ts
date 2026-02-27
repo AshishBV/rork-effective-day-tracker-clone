@@ -1,13 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
 import { useData } from '../contexts/DataContext';
 import { useActivities } from '../contexts/ActivitiesContext';
-import { getPreviousSlotIndex, getCurrentSlotIndex, getDateKey, calculateTotalSlots } from '../utils/timeUtils';
+import { getPreviousSlotIndex, getDateKey, calculateTotalSlots } from '../utils/timeUtils';
 import {
   scheduleQuickLogNotifications,
   scheduleDailyReminderNotification,
-  addNotificationResponseListener,
   scheduleStrictModeFollowUp,
   cancelNotification,
   requestPermissionsOnFirstLaunch,
@@ -15,9 +13,8 @@ import {
 import { DEFAULT_TIME_SETTINGS } from '../types/data';
 
 export function useNotifications() {
-  const queryClient = useQueryClient();
-  const { settings, updateSlot, getSelectedDay, getActiveHabits, getDayByDate, selectedDate, days } = useData();
-  const { activeActivities, getActivityByCode } = useActivities();
+  const { settings, getActiveHabits, getDayByDate, getSelectedDay } = useData();
+  const { activeActivities } = useActivities();
   const appState = useRef(AppState.currentState);
   const followUpIds = useRef<Map<number, string>>(new Map());
   const hasRequestedPermission = useRef(false);
@@ -33,53 +30,20 @@ export function useNotifications() {
     requestPermissionsOnFirstLaunch();
   }, []);
 
-  const handleNotificationResponse = useCallback((response: any) => {
-    const parsedAction = response?._parsedAction;
+  const shouldStopNotifications = useCallback((): boolean => {
+    if (!settings.stopWhenComplete) return false;
 
-    if (parsedAction?.type === 'quick_log' && parsedAction.activityCode) {
-      const code = parsedAction.activityCode;
-      const activity = getActivityByCode(code);
+    const todayKey = getDateKey(new Date());
+    const dayData = getDayByDate(todayKey);
+    const totalSlots = calculateTotalSlots(timeSettings);
+    const filledSlots = dayData.slots.filter(s => s.activityCategory !== null).length;
 
-      if (!activity) {
-        console.log(`[Notifications] Unknown activity code: ${code}`);
-        return;
-      }
-
-      const todayKey = getDateKey(new Date());
-      let targetSlotIndex: number;
-
-      if (parsedAction.slotIndex !== undefined && parsedAction.slotIndex !== null) {
-        targetSlotIndex = parsedAction.slotIndex;
-      } else {
-        const currentSlotIndex = getCurrentSlotIndex(timeSettings);
-        targetSlotIndex = currentSlotIndex > 0 ? currentSlotIndex - 1 : currentSlotIndex;
-      }
-
-      const totalSlots = calculateTotalSlots(timeSettings);
-      if (targetSlotIndex < 0 || targetSlotIndex >= totalSlots) {
-        console.log(`[Notifications] Slot index ${targetSlotIndex} out of range (0-${totalSlots - 1})`);
-        return;
-      }
-
-      console.log(`[Notifications] ✓ Logged ${code} (${activity.name}) for slot ${targetSlotIndex} on ${todayKey} | ER points: ${activity.erPoints}`);
-      console.log('[Notifications] Data was saved directly to AsyncStorage + Supabase by the response listener');
-
-      queryClient.invalidateQueries({ queryKey: ['days'] });
-
-      const followUpId = followUpIds.current.get(targetSlotIndex);
-      if (followUpId) {
-        cancelNotification(followUpId);
-        followUpIds.current.delete(targetSlotIndex);
-        console.log(`[Notifications] Cancelled follow-up for slot ${targetSlotIndex}`);
-      }
-
-      return;
+    if (filledSlots >= totalSlots) {
+      console.log('[useNotifications] All slots logged — stopping notifications');
+      return true;
     }
-
-    const actionId = response?.actionIdentifier;
-    const data = response?.notification?.request?.content?.data;
-    console.log('[Notifications] Unhandled action:', actionId, data);
-  }, [timeSettings, getActivityByCode, queryClient]);
+    return false;
+  }, [settings.stopWhenComplete, getDayByDate, timeSettings]);
 
   const scheduleFollowUpIfNeeded = useCallback(async () => {
     if (!settings.strictMode || Platform.OS === 'web') return;
@@ -97,21 +61,6 @@ export function useNotifications() {
       }
     }
   }, [settings.strictMode, getSelectedDay, timeSettings]);
-
-  const shouldStopNotifications = useCallback((): boolean => {
-    if (!settings.stopWhenComplete) return false;
-
-    const todayKey = getDateKey(new Date());
-    const dayData = getDayByDate(todayKey);
-    const totalSlots = calculateTotalSlots(timeSettings);
-    const filledSlots = dayData.slots.filter(s => s.activityCategory !== null).length;
-
-    if (filledSlots >= totalSlots) {
-      console.log('[Notifications] All slots logged — stopping notifications');
-      return true;
-    }
-    return false;
-  }, [settings.stopWhenComplete, getDayByDate, timeSettings]);
 
   const rescheduleNotifications = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -160,18 +109,6 @@ export function useNotifications() {
     shouldStopNotifications,
   ]);
 
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-
-    const subscription = addNotificationResponseListener(handleNotificationResponse);
-
-    return () => {
-      if (subscription) {
-        subscription.remove();
-      }
-    };
-  }, [handleNotificationResponse]);
-
   const debouncedReschedule = useCallback(() => {
     if (rescheduleTimer.current) {
       clearTimeout(rescheduleTimer.current);
@@ -187,9 +124,7 @@ export function useNotifications() {
 
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('[Notifications] App came to foreground — forcing data reload from AsyncStorage');
-        queryClient.invalidateQueries({ queryKey: ['days'] });
-
+        console.log('[useNotifications] App came to foreground — rescheduling');
         debouncedReschedule();
 
         if (settings.strictMode) {
