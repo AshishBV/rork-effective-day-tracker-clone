@@ -47,6 +47,7 @@ import HabitsCard from '../../../components/HabitsCard';
 import Toast from '../../../components/Toast';
 import DaySummaryCard from '../../../components/DaySummaryCard';
 import ZoomedSlotRow from '../../../components/ZoomedSlotRow';
+import BulkRangeModal from '../../../components/BulkRangeModal';
 
 import { DEFAULT_QUOTE } from '../../../types/data';
 
@@ -68,6 +69,8 @@ export default function TodayScreen() {
   const [toastMessage, setToastMessage] = useState('');
   const timeSettings = settings.timeSettings;
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(15);
+  const [bulkRangeVisible, setBulkRangeVisible] = useState(false);
+  const [bulkRangeInitialIndex, setBulkRangeInitialIndex] = useState(0);
   
   const listRef = useRef<FlatList>(null);
   const hasScrolled = useRef(false);
@@ -159,8 +162,8 @@ export default function TodayScreen() {
 
   const handleSlotLongPress = useCallback((slot: TimeSlot) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setSelectedIndices([slot.index]);
-    setSourceSlotIndex(slot.index);
+    setBulkRangeInitialIndex(slot.index);
+    setBulkRangeVisible(true);
   }, []);
 
   const handleSaveSlot = useCallback((updates: Partial<TimeSlot>) => {
@@ -281,9 +284,8 @@ export default function TodayScreen() {
 
   const handleGroupLongPress = useCallback((group: GroupedSlot) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const indices = group.slots.map(s => s.index);
-    setSelectedIndices(indices);
-    setSourceSlotIndex(indices[0]);
+    setBulkRangeInitialIndex(group.slots[0].index);
+    setBulkRangeVisible(true);
   }, []);
 
   const handleFillLast30 = useCallback(() => {
@@ -657,6 +659,23 @@ export default function TodayScreen() {
         lastCategory={lastCategory}
         onSave={handleSaveSlot}
         onClose={() => setEditingSlot(null)}
+      />
+
+      <BulkRangeModal
+        visible={bulkRangeVisible}
+        slots={selectedDay.slots}
+        initialSlotIndex={bulkRangeInitialIndex}
+        onApply={(indices, category, description) => {
+          const updates: Partial<TimeSlot> = { activityCategory: category };
+          if (description.trim()) {
+            updates.performedActivityText = description.trim();
+          }
+          updateMultipleSlots(indices, updates);
+          const activityLabel = getActivityLabel(category);
+          showToast(`Logged ${activityLabel} for ${indices.length} slots`);
+          setBulkRangeVisible(false);
+        }}
+        onClose={() => setBulkRangeVisible(false)}
       />
 
       <Toast

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useData } from '../contexts/DataContext';
 import { useActivities } from '../contexts/ActivitiesContext';
 import { getPreviousSlotIndex, getCurrentSlotIndex, getDateKey, calculateTotalSlots } from '../utils/timeUtils';
@@ -14,6 +15,7 @@ import {
 import { DEFAULT_TIME_SETTINGS } from '../types/data';
 
 export function useNotifications() {
+  const queryClient = useQueryClient();
   const { settings, updateSlot, getSelectedDay, getActiveHabits, getDayByDate, selectedDate, days } = useData();
   const { activeActivities, getActivityByCode } = useActivities();
   const appState = useRef(AppState.currentState);
@@ -62,6 +64,8 @@ export function useNotifications() {
       updateSlot(targetSlotIndex, {
         activityCategory: code,
       }, todayKey);
+
+      queryClient.invalidateQueries({ queryKey: ['days'] });
 
       console.log(`[Notifications] ✓ Logged ${code} (${activity.name}) for slot ${targetSlotIndex} on ${todayKey} | ER points: ${activity.erPoints}`);
 

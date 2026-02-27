@@ -399,6 +399,65 @@ export async function cancelNotification(id: string): Promise<void> {
   }
 }
 
+async function dismissAllNotificationsForSlot(slotMinutes: number | undefined): Promise<void> {
+  if (!Notifications || slotMinutes === undefined) return;
+
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    let dismissedCount = 0;
+    for (const notif of presented) {
+      const notifData = notif.request?.content?.data;
+      if (notifData?.type === 'quick_log' && notifData?.slotMinutes === slotMinutes) {
+        try {
+          await Notifications.dismissNotificationAsync(notif.request.identifier);
+          dismissedCount++;
+        } catch (e) {
+          console.log(`[Notifications] Could not dismiss ${notif.request.identifier}:`, e);
+        }
+      }
+    }
+    console.log(`[Notifications] Dismissed ${dismissedCount} notifications for slotMinutes=${slotMinutes}`);
+  } catch (e) {
+    console.log('[Notifications] Error dismissing slot notifications:', e);
+  }
+}
+
+export async function saveSlotDirectToStorage(
+  slotIndex: number,
+  activityCode: string,
+  dateKey: string
+): Promise<boolean> {
+  try {
+    const DAYS_KEY = 'effective_day_tracker_days';
+    const stored = await AsyncStorage.getItem(DAYS_KEY);
+    const days = stored ? JSON.parse(stored) : {};
+
+    if (!days[dateKey]) {
+      console.log(`[Notifications] No day data for ${dateKey}, creating slot will happen via context`);
+      return false;
+    }
+
+    const day = days[dateKey];
+    if (slotIndex < 0 || slotIndex >= day.slots.length) {
+      console.log(`[Notifications] Slot index ${slotIndex} out of range for ${dateKey}`);
+      return false;
+    }
+
+    day.slots[slotIndex] = {
+      ...day.slots[slotIndex],
+      activityCategory: activityCode,
+    };
+
+    days[dateKey] = day;
+    await AsyncStorage.setItem(DAYS_KEY, JSON.stringify(days));
+    console.log(`[Notifications] ✓ Direct storage save: ${activityCode} → slot ${slotIndex} on ${dateKey}`);
+    return true;
+  } catch (e) {
+    console.error('[Notifications] Direct storage save failed:', e);
+    return false;
+  }
+}
+
 export function addNotificationResponseListener(
   handler: (response: any) => void
 ): { remove: () => void } | null {
@@ -424,13 +483,24 @@ export function addNotificationResponseListener(
       if (actionId.startsWith('LOG_')) {
         const activityCode = actionId.replace('LOG_', '');
         const notificationId = response.notification.request.identifier;
-        console.log(`[Notifications] Quick log action: ${activityCode}, slot data:`, data, 'notificationId:', notificationId);
+        const slotMinutes = data?.slotMinutes as number | undefined;
+        const slotIndex = data?.slotIndex as number | undefined;
+        console.log(`[Notifications] Quick log action: ${activityCode}, slotIndex: ${slotIndex}, slotMinutes: ${slotMinutes}, notificationId: ${notificationId}`);
+
+        const now = new Date();
+        const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        if (typeof slotIndex === 'number') {
+          const saved = await saveSlotDirectToStorage(slotIndex, activityCode, dateKey);
+          console.log(`[Notifications] Direct save result: ${saved}`);
+        }
+
+        await dismissAllNotificationsForSlot(slotMinutes);
 
         try {
           await Notifications!.dismissNotificationAsync(notificationId);
-          console.log(`[Notifications] Dismissed notification ${notificationId}`);
         } catch (e) {
-          console.log(`[Notifications] Could not dismiss notification ${notificationId}:`, e);
+          console.log(`[Notifications] Fallback dismiss failed for ${notificationId}:`, e);
         }
 
         handler({
@@ -438,10 +508,10 @@ export function addNotificationResponseListener(
           _parsedAction: {
             type: 'quick_log',
             activityCode,
-            slotIndex: data?.slotIndex,
+            slotIndex,
             timeIn: data?.timeIn,
             timeOut: data?.timeOut,
-            slotMinutes: data?.slotMinutes,
+            slotMinutes,
           },
         });
         return;

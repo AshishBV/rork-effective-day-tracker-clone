@@ -1,0 +1,515 @@
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  Pressable,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { X, Clock, ChevronUp, ChevronDown, Check } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { useTheme } from '../contexts/ThemeContext';
+import { useActivities } from '../contexts/ActivitiesContext';
+import { SHADOWS } from '../constants/theme';
+import { TimeSlot } from '../types/data';
+
+type Step = 'range' | 'category' | 'description';
+
+interface BulkRangeModalProps {
+  visible: boolean;
+  slots: TimeSlot[];
+  initialSlotIndex: number;
+  onApply: (indices: number[], category: string, description: string) => void;
+  onClose: () => void;
+}
+
+export default function BulkRangeModal({
+  visible,
+  slots,
+  initialSlotIndex,
+  onApply,
+  onClose,
+}: BulkRangeModalProps) {
+  const { colors, isDark } = useTheme();
+  const { activeActivities } = useActivities();
+
+  const [step, setStep] = useState<Step>('range');
+  const [startIndex, setStartIndex] = useState(initialSlotIndex);
+  const [endIndex, setEndIndex] = useState(initialSlotIndex);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      setStep('range');
+      setStartIndex(initialSlotIndex);
+      setEndIndex(Math.min(initialSlotIndex + 3, slots.length - 1));
+      setSelectedCategory(null);
+      setDescription('');
+    }
+  }, [visible, initialSlotIndex, slots.length]);
+
+  const selectedSlotCount = useMemo(() => {
+    if (startIndex > endIndex) return 0;
+    return endIndex - startIndex + 1;
+  }, [startIndex, endIndex]);
+
+  const adjustStart = useCallback((delta: number) => {
+    Haptics.selectionAsync();
+    setStartIndex(prev => {
+      const next = prev + delta;
+      if (next < 0 || next >= slots.length || next > endIndex) return prev;
+      return next;
+    });
+  }, [slots.length, endIndex]);
+
+  const adjustEnd = useCallback((delta: number) => {
+    Haptics.selectionAsync();
+    setEndIndex(prev => {
+      const next = prev + delta;
+      if (next < 0 || next >= slots.length || next < startIndex) return prev;
+      return next;
+    });
+  }, [slots.length, startIndex]);
+
+  const handleNextFromRange = useCallback(() => {
+    if (selectedSlotCount > 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setStep('category');
+    }
+  }, [selectedSlotCount]);
+
+  const handleCategorySelect = useCallback((code: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedCategory(code);
+    setStep('description');
+  }, []);
+
+  const handleFinish = useCallback(() => {
+    if (!selectedCategory) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const indices: number[] = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      indices.push(i);
+    }
+    onApply(indices, selectedCategory, description);
+  }, [startIndex, endIndex, selectedCategory, description, onApply]);
+
+  const handleBack = useCallback(() => {
+    if (step === 'description') setStep('category');
+    else if (step === 'category') setStep('range');
+    else onClose();
+  }, [step, onClose]);
+
+  const startSlot = slots[startIndex];
+  const endSlot = slots[endIndex];
+
+  const styles = useMemo(() => StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    sheet: {
+      backgroundColor: colors.cardBackground,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '80%',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    headerLeft: {
+      flex: 1,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '700' as const,
+      color: colors.primaryText,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.secondaryText,
+      marginTop: 2,
+    },
+    closeBtn: {
+      padding: 4,
+    },
+    content: {
+      padding: 20,
+    },
+    rangeContainer: {
+      gap: 20,
+    },
+    timePickerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+      borderRadius: 14,
+      padding: 16,
+    },
+    timePickerLabel: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: colors.secondaryText,
+      width: 50,
+    },
+    timePickerCenter: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    timePickerTime: {
+      fontSize: 28,
+      fontWeight: '700' as const,
+      color: colors.primaryText,
+      fontVariant: ['tabular-nums'],
+    },
+    timePickerSlotLabel: {
+      fontSize: 11,
+      color: colors.secondaryText,
+      marginTop: 2,
+    },
+    timePickerButtons: {
+      flexDirection: 'column',
+      gap: 8,
+    },
+    adjustBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: colors.divider,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    adjustBtnDisabled: {
+      opacity: 0.3,
+    },
+    rangeArrow: {
+      alignItems: 'center',
+      paddingVertical: 4,
+    },
+    rangeArrowText: {
+      fontSize: 13,
+      color: colors.secondaryText,
+      fontWeight: '500' as const,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      backgroundColor: isDark ? 'rgba(18,116,117,0.15)' : 'rgba(18,116,117,0.08)',
+      borderRadius: 10,
+    },
+    summaryText: {
+      fontSize: 15,
+      fontWeight: '600' as const,
+      color: colors.highlight,
+    },
+    categoryGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    categoryButton: {
+      width: '30%',
+      paddingVertical: 16,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    categoryCode: {
+      fontSize: 20,
+      fontWeight: '800' as const,
+    },
+    categoryName: {
+      fontSize: 10,
+      fontWeight: '500' as const,
+      marginTop: 4,
+    },
+    categorySelected: {
+      borderWidth: 3,
+      borderColor: colors.primaryText,
+    },
+    descSection: {
+      gap: 12,
+    },
+    descLabel: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: colors.secondaryText,
+    },
+    descInput: {
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 15,
+      color: colors.primaryText,
+      minHeight: 80,
+      textAlignVertical: 'top' as const,
+    },
+    descHint: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      fontStyle: 'italic' as const,
+    },
+    footer: {
+      flexDirection: 'row',
+      padding: 20,
+      paddingBottom: 36,
+      gap: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.divider,
+    },
+    backButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: colors.divider,
+      alignItems: 'center',
+    },
+    backButtonText: {
+      fontSize: 16,
+      fontWeight: '600' as const,
+      color: colors.primaryText,
+    },
+    nextButton: {
+      flex: 2,
+      flexDirection: 'row',
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: colors.highlight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    nextButtonDisabled: {
+      opacity: 0.5,
+    },
+    nextButtonText: {
+      fontSize: 16,
+      fontWeight: '600' as const,
+      color: '#FFFFFF',
+    },
+    stepIndicator: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 6,
+      paddingTop: 12,
+    },
+    stepDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.divider,
+    },
+    stepDotActive: {
+      backgroundColor: colors.highlight,
+      width: 24,
+    },
+  }), [colors, isDark]);
+
+  if (!startSlot || !endSlot) return null;
+
+  const renderRange = () => (
+    <View style={styles.rangeContainer}>
+      <View style={styles.timePickerRow}>
+        <Text style={styles.timePickerLabel}>From</Text>
+        <View style={styles.timePickerCenter}>
+          <Text style={styles.timePickerTime}>{startSlot.timeIn}</Text>
+          <Text style={styles.timePickerSlotLabel}>Slot #{startIndex + 1}</Text>
+        </View>
+        <View style={styles.timePickerButtons}>
+          <TouchableOpacity
+            style={[styles.adjustBtn, startIndex <= 0 && styles.adjustBtnDisabled]}
+            onPress={() => adjustStart(-1)}
+            disabled={startIndex <= 0}
+          >
+            <ChevronUp size={18} color={colors.primaryText} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.adjustBtn, startIndex >= endIndex && styles.adjustBtnDisabled]}
+            onPress={() => adjustStart(1)}
+            disabled={startIndex >= endIndex}
+          >
+            <ChevronDown size={18} color={colors.primaryText} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.rangeArrow}>
+        <Text style={styles.rangeArrowText}>to</Text>
+      </View>
+
+      <View style={styles.timePickerRow}>
+        <Text style={styles.timePickerLabel}>To</Text>
+        <View style={styles.timePickerCenter}>
+          <Text style={styles.timePickerTime}>{endSlot.timeOut}</Text>
+          <Text style={styles.timePickerSlotLabel}>Slot #{endIndex + 1}</Text>
+        </View>
+        <View style={styles.timePickerButtons}>
+          <TouchableOpacity
+            style={[styles.adjustBtn, endIndex <= startIndex && styles.adjustBtnDisabled]}
+            onPress={() => adjustEnd(-1)}
+            disabled={endIndex <= startIndex}
+          >
+            <ChevronUp size={18} color={colors.primaryText} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.adjustBtn, endIndex >= slots.length - 1 && styles.adjustBtnDisabled]}
+            onPress={() => adjustEnd(1)}
+            disabled={endIndex >= slots.length - 1}
+          >
+            <ChevronDown size={18} color={colors.primaryText} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.summaryRow}>
+        <Clock size={16} color={colors.highlight} />
+        <Text style={styles.summaryText}>
+          {selectedSlotCount} slots selected ({startSlot.timeIn} → {endSlot.timeOut})
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderCategory = () => (
+    <View>
+      <View style={styles.categoryGrid}>
+        {activeActivities.map((activity) => (
+          <TouchableOpacity
+            key={activity.id}
+            style={[
+              styles.categoryButton,
+              { backgroundColor: activity.color },
+              selectedCategory === activity.code && styles.categorySelected,
+            ]}
+            onPress={() => handleCategorySelect(activity.code)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.categoryCode, { color: activity.textColor }]}>
+              {activity.code}
+            </Text>
+            <Text style={[styles.categoryName, { color: activity.textColor }]} numberOfLines={1}>
+              {activity.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderDescription = () => (
+    <View style={styles.descSection}>
+      <Text style={styles.descLabel}>Add a description (optional)</Text>
+      <TextInput
+        style={styles.descInput}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="What did you do during this time?"
+        placeholderTextColor={colors.secondaryText}
+        multiline
+        autoFocus
+      />
+      <Text style={styles.descHint}>
+        This description will be applied to all {selectedSlotCount} selected slots.
+      </Text>
+    </View>
+  );
+
+  const stepTitles: Record<Step, string> = {
+    range: 'Select Time Range',
+    category: 'Choose Activity',
+    description: 'Add Description',
+  };
+
+  const stepSubtitles: Record<Step, string> = {
+    range: 'Pick start and end times for bulk logging',
+    category: `Assigning to ${selectedSlotCount} slots`,
+    description: `${selectedSlotCount} slots · ${selectedCategory || ''}`,
+  };
+
+  const canProceed = step === 'range' ? selectedSlotCount > 0 : step === 'category' ? !!selectedCategory : true;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={[styles.sheet, SHADOWS.card]}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.title}>{stepTitles[step]}</Text>
+              <Text style={styles.subtitle}>{stepSubtitles[step]}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <X size={24} color={colors.secondaryText} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.stepIndicator}>
+            <View style={[styles.stepDot, step === 'range' && styles.stepDotActive]} />
+            <View style={[styles.stepDot, step === 'category' && styles.stepDotActive]} />
+            <View style={[styles.stepDot, step === 'description' && styles.stepDotActive]} />
+          </View>
+
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {step === 'range' && renderRange()}
+            {step === 'category' && renderCategory()}
+            {step === 'description' && renderDescription()}
+          </ScrollView>
+
+          <View style={styles.footer}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <Text style={styles.backButtonText}>
+                {step === 'range' ? 'Cancel' : 'Back'}
+              </Text>
+            </TouchableOpacity>
+            {step === 'description' ? (
+              <TouchableOpacity
+                style={[styles.nextButton, !canProceed && styles.nextButtonDisabled]}
+                onPress={handleFinish}
+                disabled={!canProceed}
+              >
+                <Check size={18} color="#FFFFFF" />
+                <Text style={styles.nextButtonText}>Apply to {selectedSlotCount} Slots</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.nextButton, !canProceed && styles.nextButtonDisabled]}
+                onPress={step === 'range' ? handleNextFromRange : undefined}
+                disabled={!canProceed}
+              >
+                <Text style={styles.nextButtonText}>
+                  {step === 'range' ? 'Next: Choose Activity' : 'Next'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
