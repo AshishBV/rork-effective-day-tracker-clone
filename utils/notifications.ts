@@ -409,7 +409,7 @@ export function addNotificationResponseListener(
   initializeNotifications().then((available) => {
     if (!available || !Notifications) return;
 
-    subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
       const actionId = response.actionIdentifier;
       const data = response.notification.request.content.data;
 
@@ -423,7 +423,16 @@ export function addNotificationResponseListener(
 
       if (actionId.startsWith('LOG_')) {
         const activityCode = actionId.replace('LOG_', '');
-        console.log(`[Notifications] Quick log action: ${activityCode}, slot data:`, data);
+        const notificationId = response.notification.request.identifier;
+        console.log(`[Notifications] Quick log action: ${activityCode}, slot data:`, data, 'notificationId:', notificationId);
+
+        try {
+          await Notifications!.dismissNotificationAsync(notificationId);
+          console.log(`[Notifications] Dismissed notification ${notificationId}`);
+        } catch (e) {
+          console.log(`[Notifications] Could not dismiss notification ${notificationId}:`, e);
+        }
+
         handler({
           ...response,
           _parsedAction: {
