@@ -100,10 +100,16 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
   }), [colors]);
 
   const activitiesWithHours = useMemo(() => {
-    return sortedActivities.filter(activity => {
-      const hours = hoursPerCategory[activity.code] || 0;
-      return hours > 0 || activity.isActive;
-    });
+    return sortedActivities
+      .filter(activity => {
+        const hours = hoursPerCategory[activity.code] || 0;
+        return hours > 0 || activity.isActive;
+      })
+      .sort((a, b) => {
+        const hoursA = hoursPerCategory[a.code] || 0;
+        const hoursB = hoursPerCategory[b.code] || 0;
+        return hoursB - hoursA;
+      });
   }, [sortedActivities, hoursPerCategory]);
 
   return (

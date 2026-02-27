@@ -212,7 +212,10 @@ async function _scheduleQuickLogNotificationsInner(
   const startMinutes = dayStartHour * 60 + dayStartMinute;
   const endMinutes = dayEndHour * 60 + dayEndMinute;
 
-  const topActions = activityCodes.slice(0, 2).map(code => ({
+  const group1Codes = activityCodes.slice(0, 3);
+  const group2Codes = activityCodes.slice(3);
+
+  const group1Actions = group1Codes.map(code => ({
     identifier: `LOG_${code}`,
     buttonTitle: code,
     options: {
@@ -220,19 +223,18 @@ async function _scheduleQuickLogNotificationsInner(
     },
   }));
 
-  const actions = [
-    ...topActions,
-    {
-      identifier: 'MORE_ACTIVITIES',
-      buttonTitle: 'More...',
-      options: {
-        opensAppToForeground: true,
-      },
+  const group2Actions = group2Codes.map(code => ({
+    identifier: `LOG_${code}`,
+    buttonTitle: code,
+    options: {
+      opensAppToForeground: false,
     },
-  ];
+  }));
 
-  await Notifications.setNotificationCategoryAsync('QUICK_LOG', actions);
-  console.log('[Notifications] Set QUICK_LOG category with actions:', actions.map(a => a.identifier).join(', '));
+  await Notifications.setNotificationCategoryAsync('QUICK_LOG_1', group1Actions);
+  await Notifications.setNotificationCategoryAsync('QUICK_LOG_2', group2Actions);
+  console.log('[Notifications] Set QUICK_LOG_1 category with actions:', group1Actions.map(a => a.identifier).join(', '));
+  console.log('[Notifications] Set QUICK_LOG_2 category with actions:', group2Actions.map(a => a.identifier).join(', '));
 
   for (let minutes = startMinutes; minutes < endMinutes; minutes += slotDuration) {
     const isInQuietHours = quietEndMinutes < quietStartMinutes
@@ -260,9 +262,9 @@ async function _scheduleQuickLogNotificationsInner(
     }
 
     try {
-      const id = await Notifications.scheduleNotificationAsync({
+      const id1 = await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'Log this slot',
+          title: `Log: ${group1Codes.join(', ')}`,
           body: `${timeIn} → ${timeOut}`,
           data: {
             type: 'quick_log',
@@ -270,8 +272,9 @@ async function _scheduleQuickLogNotificationsInner(
             timeOut,
             slotMinutes: minutes,
             slotIndex,
+            group: 1,
           },
-          categoryIdentifier: 'QUICK_LOG',
+          categoryIdentifier: 'QUICK_LOG_1',
           sound: 'default',
         },
         trigger: {
@@ -280,7 +283,30 @@ async function _scheduleQuickLogNotificationsInner(
           minute: slotMinute,
         },
       });
-      scheduledIds.push(id);
+      scheduledIds.push(id1);
+
+      const id2 = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Log: ${group2Codes.join(', ')}`,
+          body: `${timeIn} → ${timeOut}`,
+          data: {
+            type: 'quick_log',
+            timeIn,
+            timeOut,
+            slotMinutes: minutes,
+            slotIndex,
+            group: 2,
+          },
+          categoryIdentifier: 'QUICK_LOG_2',
+          sound: undefined,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: slotHour,
+          minute: slotMinute,
+        },
+      });
+      scheduledIds.push(id2);
     } catch (error) {
       console.error(`[Notifications] Failed to schedule for ${timeIn}:`, error);
     }
@@ -391,15 +417,6 @@ export function addNotificationResponseListener(
 
       if (actionId === 'SELECT_RANGE') {
         console.log('[Notifications] Opening range log screen');
-        router.push('/range-log' as any);
-        return;
-      }
-
-      if (actionId === 'MORE_ACTIVITIES') {
-        const slotIndex = data?.slotIndex;
-        const timeIn = data?.timeIn;
-        const timeOut = data?.timeOut;
-        console.log(`[Notifications] Opening app for slot ${slotIndex} (${timeIn} - ${timeOut})`);
         router.push('/range-log' as any);
         return;
       }
