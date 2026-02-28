@@ -211,10 +211,16 @@ export async function initializeRootNotificationListener(): Promise<(() => void)
     if (actionId.startsWith('LOG_')) {
       const activityCode = actionId.replace('LOG_', '');
       const slotIndex = data?.slotIndex as number | undefined;
-      const dateFromData = data?.date as string | undefined;
-      const dateKey = dateFromData || getTodayDateKey();
+      const dateKey = getTodayDateKey();
 
       console.log(`[Notifications] Action LOG: code=${activityCode}, slot=${slotIndex}, date=${dateKey}`);
+
+      try {
+        await Notifications!.dismissAllNotificationsAsync();
+        console.log('[Notifications] Dismissed all notifications after action');
+      } catch (e) {
+        console.log('[Notifications] dismissAllNotificationsAsync error:', e);
+      }
 
       if (typeof slotIndex === 'number') {
         const saved = await saveSlotToStorage(dateKey, slotIndex, activityCode);
@@ -223,13 +229,6 @@ export async function initializeRootNotificationListener(): Promise<(() => void)
         notificationEvents.emit();
       } else {
         console.log('[Notifications] No slotIndex in notification data, cannot save');
-      }
-
-      try {
-        await Notifications!.dismissAllNotificationsAsync();
-        console.log('[Notifications] Dismissed all notifications after action');
-      } catch (e) {
-        console.log('[Notifications] dismissAllNotificationsAsync error:', e);
       }
       return;
     }
