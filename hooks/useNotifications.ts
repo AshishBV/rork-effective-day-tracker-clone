@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import { useData } from '../contexts/DataContext';
 import { useActivities } from '../contexts/ActivitiesContext';
@@ -23,6 +23,12 @@ export function useNotifications() {
 
   const timeSettings = settings.timeSettings || DEFAULT_TIME_SETTINGS;
   const activityCodes = activeActivities.map(a => a.code);
+
+  const effectiveFrequencyMinutes = useMemo(() => {
+    const freq = settings.notificationFrequency ?? 15;
+    if (freq === 'custom') return settings.customNotificationMinutes ?? 45;
+    return freq;
+  }, [settings.notificationFrequency, settings.customNotificationMinutes]);
 
   useEffect(() => {
     if (Platform.OS === 'web' || hasRequestedPermission.current) return;
@@ -97,10 +103,12 @@ export function useNotifications() {
       settings.dailyReminderEnabled ?? true
     );
   }, [
+    effectiveFrequencyMinutes,
     timeSettings,
     settings.quietHoursStart,
     settings.quietHoursEnd,
     settings.notificationsEnabled,
+    settings.notificationFrequency,
     settings.dailyReminderEnabled,
     settings.stopWhenComplete,
     activityCodes,

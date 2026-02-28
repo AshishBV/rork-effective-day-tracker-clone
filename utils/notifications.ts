@@ -4,8 +4,12 @@ import { router } from 'expo-router';
 import { notificationEvents } from './notificationEvents';
 
 let Notifications: typeof import('expo-notifications') | null = null;
+let TaskManager: typeof import('expo-task-manager') | null = null;
 let notificationsReady = false;
 let responseListenerActive = false;
+let backgroundTaskRegistered = false;
+
+const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND_NOTIFICATION_TASK';
 
 const QUICK_LOG_CHANNEL_ID = 'quick-log-reminders';
 const DAILY_REMINDER_CHANNEL_ID = 'daily-reminder';
@@ -40,6 +44,108 @@ async function loadNotificationsModule(): Promise<boolean> {
     console.log('[Notifications] Module not available:', error);
     notificationsReady = false;
     return false;
+  }
+}
+
+async function loadTaskManagerModule(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  if (TaskManager !== null) return true;
+
+  try {
+    TaskManager = await import('expo-task-manager');
+    console.log('[Notifications] TaskManager module loaded');
+    return true;
+  } catch (error) {
+    console.log('[Notifications] TaskManager not available:', error);
+    return false;
+  }
+}
+
+async function handleNotificationAction(actionId: string, data: Record<string, unknown> | undefined): Promise<void> {
+  console.log('[Notifications] handleNotificationAction:', actionId, JSON.stringify(data));
+
+  if (actionId === 'SELECT_RANGE') {
+    console.log('[Notifications] Opening range-log screen');
+    try {
+      router.push('/range-log' as any);
+    } catch (e) {
+      console.log('[Notifications] Could not navigate to range-log:', e);
+    }
+    return;
+  }
+
+  if (actionId.startsWith('LOG_')) {
+    const activityCode = actionId.replace('LOG_', '');
+    const slotIndex = data?.slotIndex as number | undefined;
+    const dateKey = (data?.date as string) || getTodayDateKey();
+
+    console.log(`[Notifications] Action LOG: code=${activityCode}, slot=${slotIndex}, date=${dateKey}`);
+
+    try {
+      const notifModule = Notifications || await import('expo-notifications');
+      await notifModule.dismissAllNotificationsAsync();
+      console.log('[Notifications] Dismissed all notifications after action');
+    } catch (e) {
+      console.log('[Notifications] dismissAllNotificationsAsync error:', e);
+    }
+
+    if (typeof slotIndex === 'number') {
+      const saved = await saveSlotToStorage(dateKey, slotIndex, activityCode);
+      console.log(`[Notifications] Save result: ${saved}`);
+      notificationEvents.emit();
+    } else {
+      console.log('[Notifications] No slotIndex in notification data, cannot save');
+    }
+    return;
+  }
+
+  console.log('[Notifications] Unhandled action:', actionId);
+}
+
+export async function registerBackgroundNotificationTask(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  if (backgroundTaskRegistered) {
+    console.log('[Notifications] Background task already registered');
+    return;
+  }
+
+  const tmLoaded = await loadTaskManagerModule();
+  const nLoaded = await loadNotificationsModule();
+  if (!tmLoaded || !TaskManager || !nLoaded || !Notifications) {
+    console.log('[Notifications] Cannot register background task — modules unavailable');
+    return;
+  }
+
+  try {
+    const isTaskDefined = TaskManager.isTaskDefined(BACKGROUND_NOTIFICATION_TASK);
+    if (!isTaskDefined) {
+      TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }: any) => {
+        if (error) {
+          console.error('[Notifications] Background task error:', error);
+          return;
+        }
+
+        console.log('[Notifications] Background task received data:', JSON.stringify(data));
+        const response = data?.notification?.request?.content?.data;
+        const actionId = data?.actionIdentifier || '';
+
+        if (actionId && actionId !== 'expo.modules.notifications.actions.DEFAULT') {
+          await handleNotificationAction(actionId, response as Record<string, unknown>);
+        }
+      });
+      console.log('[Notifications] Background task defined');
+    }
+
+    await Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK);
+    backgroundTaskRegistered = true;
+    console.log('[Notifications] Background task registered successfully');
+  } catch (e: any) {
+    if (e?.message?.includes('already registered')) {
+      backgroundTaskRegistered = true;
+      console.log('[Notifications] Background task was already registered');
+    } else {
+      console.error('[Notifications] Failed to register background task:', e);
+    }
   }
 }
 
@@ -188,60 +294,27 @@ export async function initializeRootNotificationListener(): Promise<(() => void)
     return null;
   }
 
+  await registerBackgroundNotificationTask();
+
   responseListenerActive = true;
-  console.log('[Notifications] Setting up ROOT notification response listener');
+  console.log('[Notifications] Setting up ROOT notification response listener (foreground)');
 
   const subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
     const actionId = response.actionIdentifier;
     const data = response.notification.request.content.data as Record<string, unknown> | undefined;
 
-    console.log('[Notifications] ROOT handler received action:', actionId);
-    console.log('[Notifications] ROOT handler data:', JSON.stringify(data));
-
-    if (actionId === 'SELECT_RANGE') {
-      console.log('[Notifications] Opening range-log screen');
-      try {
-        router.push('/range-log' as any);
-      } catch (e) {
-        console.log('[Notifications] Could not navigate to range-log:', e);
-      }
-      return;
-    }
-
-    if (actionId.startsWith('LOG_')) {
-      const activityCode = actionId.replace('LOG_', '');
-      const slotIndex = data?.slotIndex as number | undefined;
-      const dateKey = getTodayDateKey();
-
-      console.log(`[Notifications] Action LOG: code=${activityCode}, slot=${slotIndex}, date=${dateKey}`);
-
-      try {
-        await Notifications!.dismissAllNotificationsAsync();
-        console.log('[Notifications] Dismissed all notifications after action');
-      } catch (e) {
-        console.log('[Notifications] dismissAllNotificationsAsync error:', e);
-      }
-
-      if (typeof slotIndex === 'number') {
-        const saved = await saveSlotToStorage(dateKey, slotIndex, activityCode);
-        console.log(`[Notifications] Save result: ${saved}`);
-
-        notificationEvents.emit();
-      } else {
-        console.log('[Notifications] No slotIndex in notification data, cannot save');
-      }
-      return;
-    }
+    console.log('[Notifications] FOREGROUND handler received action:', actionId);
+    console.log('[Notifications] FOREGROUND handler data:', JSON.stringify(data));
 
     if (Notifications && actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
       console.log('[Notifications] Default tap (opened app from notification)');
       return;
     }
 
-    console.log('[Notifications] Unhandled action:', actionId);
+    await handleNotificationAction(actionId, data);
   });
 
-  console.log('[Notifications] ROOT listener active');
+  console.log('[Notifications] ROOT foreground listener active');
 
   return () => {
     responseListenerActive = false;
@@ -390,13 +463,13 @@ export async function scheduleQuickLogNotifications(
     const group1Actions = group1Codes.map(code => ({
       identifier: `LOG_${code}`,
       buttonTitle: code,
-      options: { opensAppToForeground: false },
+      options: { opensAppToForeground: true },
     }));
 
     const group2Actions = group2Codes.map(code => ({
       identifier: `LOG_${code}`,
       buttonTitle: code,
-      options: { opensAppToForeground: false },
+      options: { opensAppToForeground: true },
     }));
 
     await Notifications.setNotificationCategoryAsync('QUICK_LOG_1', group1Actions);
