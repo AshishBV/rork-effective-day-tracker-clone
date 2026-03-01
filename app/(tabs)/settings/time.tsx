@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { Clock, Check } from 'lucide-react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import TimePickerModal from '../../../components/TimePickerModal';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useData } from '../../../contexts/DataContext';
 import { useActivities } from '../../../contexts/ActivitiesContext';
@@ -257,31 +257,33 @@ export default function TimeSettingsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {showStartPicker && (
-        <DateTimePicker
-          value={startTime}
-          mode="time"
-          is24Hour={false}
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event: DateTimePickerEvent, date?: Date) => {
-            setShowStartPicker(Platform.OS === 'ios');
-            if (date) setStartTime(date);
-          }}
-        />
-      )}
+      <TimePickerModal
+        visible={showStartPicker}
+        value={startTime}
+        onConfirm={(date) => {
+          setStartTime(date);
+          setShowStartPicker(false);
+        }}
+        onCancel={() => setShowStartPicker(false)}
+        accentColor={colors.highlight}
+        backgroundColor={colors.cardBackground}
+        textColor={colors.primaryText}
+        secondaryTextColor={colors.secondaryText}
+      />
 
-      {showEndPicker && (
-        <DateTimePicker
-          value={endTime}
-          mode="time"
-          is24Hour={false}
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event: DateTimePickerEvent, date?: Date) => {
-            setShowEndPicker(Platform.OS === 'ios');
-            if (date) setEndTime(date);
-          }}
-        />
-      )}
+      <TimePickerModal
+        visible={showEndPicker}
+        value={endTime}
+        onConfirm={(date) => {
+          setEndTime(date);
+          setShowEndPicker(false);
+        }}
+        onCancel={() => setShowEndPicker(false)}
+        accentColor={colors.highlight}
+        backgroundColor={colors.cardBackground}
+        textColor={colors.primaryText}
+        secondaryTextColor={colors.secondaryText}
+      />
 
       <Toast
         visible={toastVisible}
