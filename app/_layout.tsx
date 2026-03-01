@@ -8,10 +8,37 @@ import { DataProvider } from '../contexts/DataContext';
 import { ActivitiesProvider } from '../contexts/ActivitiesContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
-import { initializeRootNotificationListener } from '../utils/notifications';
+import { initializeRootNotificationListener, handleNotificationAction, NOTIFICATION_ACTION_TASK } from '../utils/notifications';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 
 SplashScreen.preventAutoHideAsync();
+
+if (Platform.OS !== 'web') {
+  try {
+    const TaskManager = require('expo-task-manager');
+    TaskManager.defineTask(NOTIFICATION_ACTION_TASK, async ({ data, error }: { data: any; error: any }) => {
+      if (error) {
+        console.error('[BackgroundTask] NOTIFICATION_ACTION_TASK error:', error);
+        return;
+      }
+
+      console.log('[BackgroundTask] NOTIFICATION_ACTION_TASK received:', JSON.stringify(data));
+
+      const actionId = data?.actionIdentifier || '';
+      const notificationData = data?.notification?.request?.content?.data as Record<string, unknown> | undefined;
+
+      if (actionId && actionId !== 'expo.modules.notifications.actions.DEFAULT') {
+        console.log(`[BackgroundTask] Processing action: ${actionId}`);
+        await handleNotificationAction(actionId, notificationData);
+      } else {
+        console.log('[BackgroundTask] Default tap or no action, ignoring');
+      }
+    });
+    console.log('[BackgroundTask] NOTIFICATION_ACTION_TASK defined at module level');
+  } catch (e) {
+    console.log('[BackgroundTask] Could not define task (expected on web):', e);
+  }
+}
 
 const queryClient = new QueryClient();
 
@@ -100,7 +127,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
-    console.log('[RootLayout] Initializing root notification listener');
+    console.log('[RootLayout] Initializing root notification listener & background task');
     initializeRootNotificationListener().then((cleanup) => {
       if (cleanup) {
         cleanupRef.current = cleanup;

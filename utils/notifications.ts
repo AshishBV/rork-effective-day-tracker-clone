@@ -3,13 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { notificationEvents } from './notificationEvents';
 
-let Notifications: typeof import('expo-notifications') | null = null;
-let TaskManager: typeof import('expo-task-manager') | null = null;
+let Notifications: any = null;
 let notificationsReady = false;
 let responseListenerActive = false;
 let backgroundTaskRegistered = false;
-
-const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND_NOTIFICATION_TASK';
 
 const QUICK_LOG_CHANNEL_ID = 'quick-log-reminders';
 const DAILY_REMINDER_CHANNEL_ID = 'daily-reminder';
@@ -21,21 +18,58 @@ const SETTINGS_STORAGE_KEY = 'effective_day_tracker_settings';
 
 let isSchedulingInProgress = false;
 
+async function isSlotAlreadyFilled(date: string, slotIndex: number): Promise<boolean> {
+  try {
+    const stored = await AsyncStorage.getItem(DAYS_STORAGE_KEY);
+    if (!stored) return false;
+    const days = JSON.parse(stored);
+    const day = days[date];
+    if (!day?.slots?.[slotIndex]) return false;
+    return day.slots[slotIndex].activityCategory != null;
+  } catch (e) {
+    console.log('[Notifications] Error checking slot status:', e);
+    return false;
+  }
+}
+
+function getCurrentDateKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 async function loadNotificationsModule(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   if (Notifications !== null) return notificationsReady;
 
   try {
-    Notifications = await import('expo-notifications');
+    Notifications = await import('expo-notifications') as any;
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        priority: Notifications!.AndroidNotificationPriority.HIGH,
-      }),
+      handleNotification: async (notification: any) => {
+        const data = notification.request.content.data;
+        if (data?.type === 'quick_log' && typeof data?.slotIndex === 'number') {
+          const todayKey = getCurrentDateKey();
+          const filled = await isSlotAlreadyFilled(todayKey, data.slotIndex as number);
+          if (filled) {
+            console.log(`[Notifications] Slot ${data.slotIndex} on ${todayKey} already filled — suppressing notification`);
+            return {
+              shouldShowAlert: false,
+              shouldPlaySound: false,
+              shouldSetBadge: false,
+              shouldShowBanner: false,
+              shouldShowList: false,
+              priority: (Notifications as any).AndroidNotificationPriority?.LOW,
+            };
+          }
+        }
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+          priority: (Notifications as any).AndroidNotificationPriority?.HIGH,
+        };
+      },
     });
     notificationsReady = true;
     console.log('[Notifications] Module loaded');
@@ -47,21 +81,8 @@ async function loadNotificationsModule(): Promise<boolean> {
   }
 }
 
-async function loadTaskManagerModule(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
-  if (TaskManager !== null) return true;
 
-  try {
-    TaskManager = await import('expo-task-manager');
-    console.log('[Notifications] TaskManager module loaded');
-    return true;
-  } catch (error) {
-    console.log('[Notifications] TaskManager not available:', error);
-    return false;
-  }
-}
-
-async function handleNotificationAction(actionId: string, data: Record<string, unknown> | undefined): Promise<void> {
+export async function handleNotificationAction(actionId: string, data: Record<string, unknown> | undefined): Promise<void> {
   console.log('[Notifications] handleNotificationAction:', actionId, JSON.stringify(data));
 
   if (actionId === 'SELECT_RANGE') {
@@ -77,12 +98,12 @@ async function handleNotificationAction(actionId: string, data: Record<string, u
   if (actionId.startsWith('LOG_')) {
     const activityCode = actionId.replace('LOG_', '');
     const slotIndex = data?.slotIndex as number | undefined;
-    const dateKey = (data?.date as string) || getTodayDateKey();
+    const dateKey = getCurrentDateKey();
 
     console.log(`[Notifications] Action LOG: code=${activityCode}, slot=${slotIndex}, date=${dateKey}`);
 
     try {
-      const notifModule = Notifications || await import('expo-notifications');
+      const notifModule = Notifications || await import('expo-notifications') as any;
       await notifModule.dismissAllNotificationsAsync();
       console.log('[Notifications] Dismissed all notifications after action');
     } catch (e) {
@@ -102,6 +123,8 @@ async function handleNotificationAction(actionId: string, data: Record<string, u
   console.log('[Notifications] Unhandled action:', actionId);
 }
 
+export const NOTIFICATION_ACTION_TASK = 'NOTIFICATION_ACTION_TASK';
+
 export async function registerBackgroundNotificationTask(): Promise<void> {
   if (Platform.OS === 'web') return;
   if (backgroundTaskRegistered) {
@@ -109,36 +132,16 @@ export async function registerBackgroundNotificationTask(): Promise<void> {
     return;
   }
 
-  const tmLoaded = await loadTaskManagerModule();
   const nLoaded = await loadNotificationsModule();
-  if (!tmLoaded || !TaskManager || !nLoaded || !Notifications) {
-    console.log('[Notifications] Cannot register background task — modules unavailable');
+  if (!nLoaded || !Notifications) {
+    console.log('[Notifications] Cannot register background task — notifications unavailable');
     return;
   }
 
   try {
-    const isTaskDefined = TaskManager.isTaskDefined(BACKGROUND_NOTIFICATION_TASK);
-    if (!isTaskDefined) {
-      TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }: any) => {
-        if (error) {
-          console.error('[Notifications] Background task error:', error);
-          return;
-        }
-
-        console.log('[Notifications] Background task received data:', JSON.stringify(data));
-        const response = data?.notification?.request?.content?.data;
-        const actionId = data?.actionIdentifier || '';
-
-        if (actionId && actionId !== 'expo.modules.notifications.actions.DEFAULT') {
-          await handleNotificationAction(actionId, response as Record<string, unknown>);
-        }
-      });
-      console.log('[Notifications] Background task defined');
-    }
-
-    await Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK);
+    await Notifications.registerTaskAsync(NOTIFICATION_ACTION_TASK);
     backgroundTaskRegistered = true;
-    console.log('[Notifications] Background task registered successfully');
+    console.log('[Notifications] Background task registered successfully with task:', NOTIFICATION_ACTION_TASK);
   } catch (e: any) {
     if (e?.message?.includes('already registered')) {
       backgroundTaskRegistered = true;
@@ -150,8 +153,7 @@ export async function registerBackgroundNotificationTask(): Promise<void> {
 }
 
 function getTodayDateKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return getCurrentDateKey();
 }
 
 function generateTimeSlotsForDay(timeSettings: {
@@ -299,7 +301,7 @@ export async function initializeRootNotificationListener(): Promise<(() => void)
   responseListenerActive = true;
   console.log('[Notifications] Setting up ROOT notification response listener (foreground)');
 
-  const subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
+  const subscription = Notifications.addNotificationResponseReceivedListener(async (response: any) => {
     const actionId = response.actionIdentifier;
     const data = response.notification.request.content.data as Record<string, unknown> | undefined;
 
@@ -506,6 +508,7 @@ export async function scheduleQuickLogNotifications(
         slotMinutes: minutes,
         slotIndex,
         date: todayDateKey,
+        activityCodes: activityCodes,
       };
 
       try {
