@@ -10,6 +10,7 @@ interface TimeSlotRowProps {
   isCurrentSlot: boolean;
   isPreviousSlot: boolean;
   isSelected: boolean;
+  showInlineButtons?: boolean;
   onPress: () => void;
   onLongPress: () => void;
   onQuickLog?: (slotIndex: number, category: string) => void;
@@ -20,6 +21,7 @@ export default function TimeSlotRow({
   isCurrentSlot, 
   isPreviousSlot,
   isSelected,
+  showInlineButtons = false,
   onPress, 
   onLongPress,
   onQuickLog,
@@ -172,7 +174,7 @@ export default function TimeSlotRow({
         )}
       </View>
 
-      {isUnlogged && onQuickLog ? (
+      {isUnlogged && showInlineButtons && onQuickLog ? (
         <View style={styles.inlineButtons}>
           {activeActivities.slice(0, 7).map((act) => (
             <TouchableOpacity

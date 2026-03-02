@@ -188,7 +188,7 @@ export default function TodayScreen() {
   const handleJumpToNow = useCallback(() => {
     if (listRef.current && currentSlotIndex >= 0) {
       const safeIndex = Math.min(currentSlotIndex, selectedDay.slots.length - 1);
-      listRef.current.scrollToIndex({ index: Math.max(0, safeIndex), animated: true, viewPosition: 0.3 });
+      listRef.current.scrollToIndex({ index: Math.max(0, safeIndex), animated: true, viewPosition: 0.4 });
     }
   }, [currentSlotIndex, selectedDay.slots.length]);
 
@@ -321,23 +321,21 @@ export default function TodayScreen() {
     setTimeout(() => setRefreshing(false), 500);
   }, []);
 
-  const getItemLayout = useCallback((_: any, index: number) => ({
-    length: SLOT_HEIGHT,
-    offset: SLOT_HEIGHT * index,
-    index,
-  }), []);
-
-  const renderSlot = useCallback(({ item }: { item: TimeSlot }) => (
-    <TimeSlotRow
-      slot={item}
-      isCurrentSlot={item.index === currentSlotIndex}
-      isPreviousSlot={item.index === previousSlotIndex}
-      isSelected={selectedIndices.includes(item.index)}
-      onPress={() => handleSlotPress(item)}
-      onLongPress={() => handleSlotLongPress(item)}
-      onQuickLog={handleInlineQuickLog}
-    />
-  ), [currentSlotIndex, previousSlotIndex, selectedIndices, handleSlotPress, handleSlotLongPress, handleInlineQuickLog]);
+  const renderSlot = useCallback(({ item }: { item: TimeSlot }) => {
+    const isCurrentOrPrevious = item.index === currentSlotIndex || item.index === previousSlotIndex;
+    return (
+      <TimeSlotRow
+        slot={item}
+        isCurrentSlot={item.index === currentSlotIndex}
+        isPreviousSlot={item.index === previousSlotIndex}
+        isSelected={selectedIndices.includes(item.index)}
+        showInlineButtons={isCurrentOrPrevious}
+        onPress={() => handleSlotPress(item)}
+        onLongPress={() => handleSlotLongPress(item)}
+        onQuickLog={handleInlineQuickLog}
+      />
+    );
+  }, [currentSlotIndex, previousSlotIndex, selectedIndices, handleSlotPress, handleSlotLongPress, handleInlineQuickLog]);
 
   const renderGroupedSlot = useCallback(({ item }: { item: GroupedSlot }) => (
     <ZoomedSlotRow
@@ -593,7 +591,6 @@ export default function TodayScreen() {
           data={selectedDay.slots}
           renderItem={renderSlot}
           keyExtractor={(item) => item.index.toString()}
-          getItemLayout={getItemLayout}
           ListHeaderComponent={ListHeader}
           ListFooterComponent={ListFooter}
           refreshControl={
