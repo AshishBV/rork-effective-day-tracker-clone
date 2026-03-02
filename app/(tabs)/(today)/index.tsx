@@ -71,6 +71,8 @@ export default function TodayScreen() {
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(15);
   const [bulkRangeVisible, setBulkRangeVisible] = useState(false);
   const [bulkRangeInitialIndex, setBulkRangeInitialIndex] = useState(0);
+  const [bulkRangeInitialCategory, setBulkRangeInitialCategory] = useState<string | null>(null);
+  const [bulkRangeInitialDescription, setBulkRangeInitialDescription] = useState('');
   
   const listRef = useRef<FlatList>(null);
   const hasScrolled = useRef(false);
@@ -163,6 +165,13 @@ export default function TodayScreen() {
   const handleSlotLongPress = useCallback((slot: TimeSlot) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setBulkRangeInitialIndex(slot.index);
+    if (slot.activityCategory && slot.performedActivityText) {
+      setBulkRangeInitialCategory(slot.activityCategory);
+      setBulkRangeInitialDescription(slot.performedActivityText);
+    } else {
+      setBulkRangeInitialCategory(null);
+      setBulkRangeInitialDescription('');
+    }
     setBulkRangeVisible(true);
   }, []);
 
@@ -284,7 +293,15 @@ export default function TodayScreen() {
 
   const handleGroupLongPress = useCallback((group: GroupedSlot) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setBulkRangeInitialIndex(group.slots[0].index);
+    const firstSlot = group.slots[0];
+    setBulkRangeInitialIndex(firstSlot.index);
+    if (firstSlot.activityCategory && firstSlot.performedActivityText) {
+      setBulkRangeInitialCategory(firstSlot.activityCategory);
+      setBulkRangeInitialDescription(firstSlot.performedActivityText);
+    } else {
+      setBulkRangeInitialCategory(null);
+      setBulkRangeInitialDescription('');
+    }
     setBulkRangeVisible(true);
   }, []);
 
@@ -665,6 +682,8 @@ export default function TodayScreen() {
         visible={bulkRangeVisible}
         slots={selectedDay.slots}
         initialSlotIndex={bulkRangeInitialIndex}
+        initialCategory={bulkRangeInitialCategory}
+        initialDescription={bulkRangeInitialDescription}
         onApply={(indices, category, description) => {
           const updates: Partial<TimeSlot> = { activityCategory: category };
           if (description.trim()) {

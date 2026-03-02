@@ -24,6 +24,8 @@ interface BulkRangeModalProps {
   visible: boolean;
   slots: TimeSlot[];
   initialSlotIndex: number;
+  initialCategory?: string | null;
+  initialDescription?: string;
   onApply: (indices: number[], category: string, description: string) => void;
   onClose: () => void;
 }
@@ -32,6 +34,8 @@ export default function BulkRangeModal({
   visible,
   slots,
   initialSlotIndex,
+  initialCategory,
+  initialDescription,
   onApply,
   onClose,
 }: BulkRangeModalProps) {
@@ -49,10 +53,15 @@ export default function BulkRangeModal({
       setStep('range');
       setStartIndex(initialSlotIndex);
       setEndIndex(Math.min(initialSlotIndex + 3, slots.length - 1));
-      setSelectedCategory(null);
-      setDescription('');
+      if (initialCategory && initialDescription) {
+        setSelectedCategory(initialCategory);
+        setDescription(initialDescription);
+      } else {
+        setSelectedCategory(null);
+        setDescription('');
+      }
     }
-  }, [visible, initialSlotIndex, slots.length]);
+  }, [visible, initialSlotIndex, slots.length, initialCategory, initialDescription]);
 
   const selectedSlotCount = useMemo(() => {
     if (startIndex > endIndex) return 0;

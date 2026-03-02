@@ -478,6 +478,14 @@ export async function scheduleQuickLogNotifications(
     await Notifications.setNotificationCategoryAsync('QUICK_LOG_2', group2Actions);
     console.log('[Notifications] Categories: QUICK_LOG_1=[' + group1Codes.join(',') + '], QUICK_LOG_2=[' + group2Codes.join(',') + ']');
 
+    let storedDays: Record<string, any> = {};
+    try {
+      const stored = await AsyncStorage.getItem(DAYS_STORAGE_KEY);
+      if (stored) storedDays = JSON.parse(stored);
+    } catch (e) {
+      console.log('[Notifications] Could not read days for pre-schedule check:', e);
+    }
+
     for (let minutes = startMinutes; minutes < endMinutes; minutes += slotDuration) {
       const isInQuietHours = quietEndMinutes < quietStartMinutes
         ? (minutes >= quietStartMinutes || minutes < quietEndMinutes)
@@ -494,6 +502,12 @@ export async function scheduleQuickLogNotifications(
       const timeIn = `${slotHour.toString().padStart(2, '0')}:${slotMinute.toString().padStart(2, '0')}`;
       const timeOut = `${slotEndHour.toString().padStart(2, '0')}:${slotEndMin.toString().padStart(2, '0')}`;
       const slotIndex = Math.floor((minutes - startMinutes) / slotDuration);
+
+      const todayDay = storedDays[todayDateKey];
+      if (todayDay?.slots?.[slotIndex]?.activityCategory != null) {
+        console.log(`[Notifications] Slot ${slotIndex} (${timeIn}) already filled for ${todayDateKey}, skipping schedule`);
+        continue;
+      }
 
       const triggerDate = new Date(now);
       triggerDate.setHours(slotHour, slotMinute, 0, 0);
