@@ -48,6 +48,7 @@ import Toast from '../../../components/Toast';
 import DaySummaryCard from '../../../components/DaySummaryCard';
 import ZoomedSlotRow from '../../../components/ZoomedSlotRow';
 import BulkRangeModal from '../../../components/BulkRangeModal';
+import StreaksCard from '../../../components/StreaksCard';
 
 import { DEFAULT_QUOTE } from '../../../types/data';
 
@@ -516,6 +517,8 @@ export default function TodayScreen() {
         days={days}
         activeHabits={activeHabits}
       />
+
+      <StreaksCard selectedDate={selectedDate} />
 
       <View style={styles.daySpentContainer}>
         <DaySpentBar percentage={daySpent} />

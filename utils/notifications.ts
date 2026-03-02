@@ -12,6 +12,8 @@ const QUICK_LOG_CHANNEL_ID = 'quick-log-reminders';
 const DAILY_REMINDER_CHANNEL_ID = 'daily-reminder';
 const SCHEDULED_IDS_KEY = 'scheduled_notification_ids';
 const DAILY_REMINDER_ID_KEY = 'daily_reminder_notification_id';
+const WEEKLY_REPORT_ID_KEY = 'weekly_report_notification_id';
+const WEEKLY_REPORT_CHANNEL_ID = 'weekly-report';
 const PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
 const DAYS_STORAGE_KEY = 'effective_day_tracker_days';
 const SETTINGS_STORAGE_KEY = 'effective_day_tracker_settings';
@@ -25,9 +27,28 @@ async function isSlotAlreadyFilled(date: string, slotIndex: number): Promise<boo
     const days = JSON.parse(stored);
     const day = days[date];
     if (!day?.slots?.[slotIndex]) return false;
-    return day.slots[slotIndex].activityCategory != null;
+    const cat = day.slots[slotIndex].activityCategory;
+    return cat !== null && cat !== undefined && cat !== '';
   } catch (e) {
     console.log('[Notifications] Error checking slot status:', e);
+    return false;
+  }
+}
+
+async function isSlotFilledByTime(timeIn: string): Promise<boolean> {
+  try {
+    const todayKey = getCurrentDateKey();
+    const stored = await AsyncStorage.getItem(DAYS_STORAGE_KEY);
+    if (!stored) return false;
+    const days = JSON.parse(stored);
+    const day = days[todayKey];
+    if (!day?.slots) return false;
+    const slot = day.slots.find((s: any) => s.timeIn === timeIn);
+    if (!slot) return false;
+    const cat = slot.activityCategory;
+    return cat !== null && cat !== undefined && cat !== '';
+  } catch (e) {
+    console.log('[Notifications] Error checking slot by time:', e);
     return false;
   }
 }
@@ -46,11 +67,23 @@ async function loadNotificationsModule(): Promise<boolean> {
     Notifications.setNotificationHandler({
       handleNotification: async (notification: any) => {
         const data = notification.request.content.data;
-        if (data?.type === 'quick_log' && typeof data?.slotIndex === 'number') {
+        if (data?.type === 'quick_log') {
           const todayKey = getCurrentDateKey();
-          const filled = await isSlotAlreadyFilled(todayKey, data.slotIndex as number);
+          let filled = false;
+
+          if (typeof data?.slotIndex === 'number') {
+            filled = await isSlotAlreadyFilled(todayKey, data.slotIndex as number);
+          }
+
+          if (!filled && typeof data?.timeIn === 'string') {
+            filled = await isSlotFilledByTime(data.timeIn as string);
+          }
+
           if (filled) {
-            console.log(`[Notifications] Slot ${data.slotIndex} on ${todayKey} already filled — suppressing notification`);
+            console.log(`[Notifications] Slot ${data.slotIndex ?? data.timeIn} on ${todayKey} already filled — suppressing notification`);
+            try {
+              await Notifications.dismissNotificationAsync(notification.request.identifier);
+            } catch (_e) {}
             return {
               shouldShowAlert: false,
               shouldPlaySound: false,
@@ -670,6 +703,148 @@ export async function scheduleStrictModeFollowUp(
   } catch (error) {
     console.error('[Notifications] Failed to schedule strict mode follow-up:', error);
     return null;
+  }
+}
+
+async function cancelWeeklyReport(): Promise<void> {
+  try {
+    const available = await loadNotificationsModule();
+    if (!available || !Notifications) return;
+    const storedId = await AsyncStorage.getItem(WEEKLY_REPORT_ID_KEY);
+    if (storedId) {
+      await Notifications.cancelScheduledNotificationAsync(storedId);
+      await AsyncStorage.removeItem(WEEKLY_REPORT_ID_KEY);
+    }
+  } catch (error) {
+    console.error('[Notifications] Error cancelling weekly report:', error);
+  }
+}
+
+export async function scheduleWeeklyReportNotification(
+  days: Record<string, any>,
+  activeHabits: { id: string; name: string }[],
+  erGoal: number,
+  enabled: boolean
+): Promise<void> {
+  if (Platform.OS === 'web') return;
+
+  const available = await loadNotificationsModule();
+  if (!available || !Notifications) return;
+
+  await cancelWeeklyReport();
+
+  if (!enabled) return;
+
+  const hasPermission = await requestPermissions();
+  if (!hasPermission) return;
+
+  await setupNotificationChannels();
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(WEEKLY_REPORT_CHANNEL_ID, {
+      name: 'Weekly Report',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#4CAF50',
+      sound: 'default',
+    });
+  }
+
+  const now = new Date();
+  const past7 = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    past7.push({ key, date: d });
+  }
+
+  let totalER = 0;
+  let erCount = 0;
+  let bestDay = '';
+  let bestER = -1;
+  let totalHabitsCompleted = 0;
+  let totalHabitsPossible = 0;
+
+  for (const { key } of past7) {
+    const dayData = days[key];
+    if (!dayData) continue;
+
+    const filledSlots = dayData.slots?.filter((s: any) => s.activityCategory !== null) || [];
+    if (filledSlots.length > 0) {
+      let weightedPts = 0;
+      let totalMin = 0;
+      for (const slot of dayData.slots) {
+        const [inH, inM] = slot.timeIn.split(':').map(Number);
+        const [outH, outM] = slot.timeOut.split(':').map(Number);
+        const dur = (outH * 60 + outM) - (inH * 60 + inM);
+        const mins = dur > 0 ? dur : 15;
+        const code = slot.activityCategory?.toUpperCase() || '';
+        let pts = 0;
+        if (code === 'P' || code === 'A' || code === 'EC') pts = 1;
+        else if (code === 'CA') pts = 0.5;
+        weightedPts += pts * mins;
+        totalMin += mins;
+      }
+      const er = totalMin > 0 ? weightedPts / totalMin : 0;
+      totalER += er;
+      erCount++;
+      if (er > bestER) {
+        bestER = er;
+        const d = new Date(key + 'T12:00:00');
+        bestDay = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+    }
+
+    if (activeHabits.length > 0) {
+      const completed = activeHabits.filter(h => dayData.habitCompletions?.[h.id]).length;
+      totalHabitsCompleted += completed;
+      totalHabitsPossible += activeHabits.length;
+    }
+  }
+
+  const avgER = erCount > 0 ? totalER / erCount : 0;
+  const avgERPct = Math.round(avgER * 100);
+  const bestERPct = Math.round(bestER * 100);
+
+  let motivational = '';
+  if (avgERPct >= 80) motivational = 'Outstanding week! Keep this momentum going!';
+  else if (avgERPct >= 60) motivational = 'Solid week! Push a bit harder next week.';
+  else if (avgERPct >= 40) motivational = 'Room for improvement. You can do better!';
+  else if (erCount > 0) motivational = 'Tough week. Reset and come back stronger!';
+  else motivational = 'Start tracking to see your progress!';
+
+  let body = '';
+  if (erCount > 0) {
+    body = `Avg ER: ${avgERPct}%`;
+    if (bestDay) body += ` | Best: ${bestDay} (${bestERPct}%)`;
+  } else {
+    body = 'No ER data this week.';
+  }
+  if (totalHabitsPossible > 0) {
+    body += `\nHabits: ${totalHabitsCompleted}/${totalHabitsPossible}`;
+  }
+  body += `\n${motivational}`;
+
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Weekly Report Card',
+        body,
+        data: { type: 'weekly_report' },
+        sound: 'default',
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: 1,
+        hour: 20,
+        minute: 0,
+      },
+    });
+    await AsyncStorage.setItem(WEEKLY_REPORT_ID_KEY, id);
+    console.log('[Notifications] Weekly report scheduled for Sunday 8 PM');
+  } catch (error) {
+    console.error('[Notifications] Failed to schedule weekly report:', error);
   }
 }
 

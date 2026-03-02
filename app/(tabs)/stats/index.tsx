@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Maximize2, BookOpen } from 'lucide-react-native';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useActivities } from '../../../contexts/ActivitiesContext';
 import { SHADOWS, CHART_THEMES } from '../../../constants/theme';
@@ -444,6 +444,65 @@ export default function StatsScreen() {
       paddingVertical: 4,
       borderRadius: 4,
     },
+    journalEmptyCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      padding: 32,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      alignItems: 'center',
+      gap: 12,
+    },
+    journalEmptyText: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      fontStyle: 'italic',
+    },
+    journalCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 14,
+      padding: 16,
+      marginHorizontal: 16,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+    },
+    journalDateText: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: colors.highlight,
+      marginBottom: 10,
+      letterSpacing: 0.2,
+    },
+    journalHighlightRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 6,
+      paddingLeft: 4,
+    },
+    journalBullet: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.highlight,
+      marginTop: 6,
+      marginRight: 10,
+      opacity: 0.6,
+    },
+    journalHighlightText: {
+      fontSize: 14,
+      color: colors.primaryText,
+      lineHeight: 20,
+      flex: 1,
+    },
+    journalDivider: {
+      width: 1,
+      height: 16,
+      backgroundColor: colors.divider,
+      alignSelf: 'center',
+      marginVertical: 2,
+    },
   }), [colors]);
 
   return (
@@ -671,6 +730,46 @@ export default function StatsScreen() {
           <Text style={styles.insightNoData}>Not enough data (need 7+ days with both steps and TEF)</Text>
         )}
       </View>
+
+      <Text style={styles.sectionTitle}>Monthly Highlights Journal</Text>
+      {(() => {
+        const highlightDays: { dateKey: string; date: Date; highlights: string[] }[] = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const dayData = days[dateKey];
+          if (!dayData?.highlights) continue;
+          const filled = dayData.highlights.filter((h: string) => h && h.trim().length > 0);
+          if (filled.length === 0) continue;
+          highlightDays.push({ dateKey, date: new Date(currentMonth.year, currentMonth.month, d), highlights: filled });
+        }
+        if (highlightDays.length === 0) {
+          return (
+            <View style={[styles.journalEmptyCard, SHADOWS.card]}>
+              <BookOpen size={24} color={colors.secondaryText} style={{ opacity: 0.5 }} />
+              <Text style={styles.journalEmptyText}>No highlights recorded this month</Text>
+            </View>
+          );
+        }
+        return highlightDays.map((entry, idx) => {
+          const dayLabel = entry.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+          return (
+            <View key={entry.dateKey}>
+              <View style={[styles.journalCard, SHADOWS.card]}>
+                <Text style={styles.journalDateText}>{dayLabel}</Text>
+                {entry.highlights.map((h, i) => (
+                  <View key={i} style={styles.journalHighlightRow}>
+                    <View style={styles.journalBullet} />
+                    <Text style={styles.journalHighlightText}>{h}</Text>
+                  </View>
+                ))}
+              </View>
+              {idx < highlightDays.length - 1 && (
+                <View style={styles.journalDivider} />
+              )}
+            </View>
+          );
+        });
+      })()}
 
       <View style={{ height: 40 }} />
 

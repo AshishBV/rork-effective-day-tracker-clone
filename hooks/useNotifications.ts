@@ -6,6 +6,7 @@ import { getPreviousSlotIndex, getDateKey, calculateTotalSlots } from '../utils/
 import {
   scheduleQuickLogNotifications,
   scheduleDailyReminderNotification,
+  scheduleWeeklyReportNotification,
   scheduleStrictModeFollowUp,
   cancelNotification,
   requestPermissionsOnFirstLaunch,
@@ -13,7 +14,7 @@ import {
 import { DEFAULT_TIME_SETTINGS } from '../types/data';
 
 export function useNotifications() {
-  const { settings, getActiveHabits, getDayByDate, getSelectedDay } = useData();
+  const { settings, getActiveHabits, getDayByDate, getSelectedDay, days } = useData();
   const { activeActivities } = useActivities();
   const appState = useRef(AppState.currentState);
   const followUpIds = useRef<Map<number, string>>(new Map());
@@ -102,6 +103,17 @@ export function useNotifications() {
       pendingTodos,
       settings.dailyReminderEnabled ?? true
     );
+
+    try {
+      await scheduleWeeklyReportNotification(
+        days,
+        activeHabits.map(h => ({ id: h.id, name: h.name })),
+        settings.erGoal,
+        settings.notificationsEnabled
+      );
+    } catch (e) {
+      console.log('[useNotifications] Weekly report scheduling failed:', e);
+    }
   }, [
     effectiveFrequencyMinutes,
     timeSettings,
@@ -114,6 +126,8 @@ export function useNotifications() {
     activityCodes,
     getActiveHabits,
     getDayByDate,
+    days,
+    settings.erGoal,
     shouldStopNotifications,
   ]);
 
