@@ -11,12 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Clock, ChevronUp, ChevronDown, Check } from 'lucide-react-native';
+import { X, Clock, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { useActivities } from '../contexts/ActivitiesContext';
 import { SHADOWS } from '../constants/theme';
 import { TimeSlot } from '../types/data';
+import TimePickerModal from './TimePickerModal';
 
 type Step = 'range' | 'category' | 'description';
 
@@ -47,6 +48,8 @@ export default function BulkRangeModal({
   const [endIndex, setEndIndex] = useState(initialSlotIndex);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -68,23 +71,42 @@ export default function BulkRangeModal({
     return endIndex - startIndex + 1;
   }, [startIndex, endIndex]);
 
-  const adjustStart = useCallback((delta: number) => {
-    Haptics.selectionAsync();
-    setStartIndex(prev => {
-      const next = prev + delta;
-      if (next < 0 || next >= slots.length || next > endIndex) return prev;
-      return next;
-    });
-  }, [slots.length, endIndex]);
+  const timeToDate = useCallback((timeStr: string): Date => {
+    const [h, m] = timeStr.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  }, []);
 
-  const adjustEnd = useCallback((delta: number) => {
+  const findNearestSlotIndex = useCallback((date: Date, mode: 'start' | 'end'): number => {
+    const totalMinutes = date.getHours() * 60 + date.getMinutes();
+    let bestIndex = 0;
+    let bestDiff = Infinity;
+    for (let i = 0; i < slots.length; i++) {
+      const [h, m] = (mode === 'start' ? slots[i].timeIn : slots[i].timeOut).split(':').map(Number);
+      const slotMinutes = h * 60 + m;
+      const diff = Math.abs(slotMinutes - totalMinutes);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }, [slots]);
+
+  const handleFromTimeConfirm = useCallback((date: Date) => {
     Haptics.selectionAsync();
-    setEndIndex(prev => {
-      const next = prev + delta;
-      if (next < 0 || next >= slots.length || next < startIndex) return prev;
-      return next;
-    });
-  }, [slots.length, startIndex]);
+    const idx = findNearestSlotIndex(date, 'start');
+    setStartIndex(Math.min(idx, endIndex));
+    setShowFromPicker(false);
+  }, [findNearestSlotIndex, endIndex]);
+
+  const handleToTimeConfirm = useCallback((date: Date) => {
+    Haptics.selectionAsync();
+    const idx = findNearestSlotIndex(date, 'end');
+    setEndIndex(Math.max(idx, startIndex));
+    setShowToPicker(false);
+  }, [findNearestSlotIndex, startIndex]);
 
   const handleNextFromRange = useCallback(() => {
     if (selectedSlotCount > 0) {
@@ -183,31 +205,30 @@ export default function BulkRangeModal({
       flex: 1,
       alignItems: 'center',
     },
+    timePickerTappable: {
+      paddingVertical: 8,
+      paddingHorizontal: 20,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: colors.highlight,
+      borderStyle: 'dashed' as const,
+    },
     timePickerTime: {
       fontSize: 28,
       fontWeight: '700' as const,
-      color: colors.primaryText,
+      color: colors.highlight,
       fontVariant: ['tabular-nums'],
     },
     timePickerSlotLabel: {
       fontSize: 11,
       color: colors.secondaryText,
+      marginTop: 4,
+    },
+    tapHint: {
+      fontSize: 10,
+      color: colors.secondaryText,
       marginTop: 2,
-    },
-    timePickerButtons: {
-      flexDirection: 'column',
-      gap: 8,
-    },
-    adjustBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      backgroundColor: colors.divider,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    adjustBtnDisabled: {
-      opacity: 0.3,
+      opacity: 0.7,
     },
     rangeArrow: {
       alignItems: 'center',
@@ -344,24 +365,15 @@ export default function BulkRangeModal({
       <View style={styles.timePickerRow}>
         <Text style={styles.timePickerLabel}>From</Text>
         <View style={styles.timePickerCenter}>
-          <Text style={styles.timePickerTime}>{startSlot.timeIn}</Text>
+          <TouchableOpacity
+            style={styles.timePickerTappable}
+            onPress={() => setShowFromPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.timePickerTime}>{startSlot.timeIn}</Text>
+          </TouchableOpacity>
           <Text style={styles.timePickerSlotLabel}>Slot #{startIndex + 1}</Text>
-        </View>
-        <View style={styles.timePickerButtons}>
-          <TouchableOpacity
-            style={[styles.adjustBtn, startIndex <= 0 && styles.adjustBtnDisabled]}
-            onPress={() => adjustStart(-1)}
-            disabled={startIndex <= 0}
-          >
-            <ChevronUp size={18} color={colors.primaryText} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.adjustBtn, startIndex >= endIndex && styles.adjustBtnDisabled]}
-            onPress={() => adjustStart(1)}
-            disabled={startIndex >= endIndex}
-          >
-            <ChevronDown size={18} color={colors.primaryText} />
-          </TouchableOpacity>
+          <Text style={styles.tapHint}>Tap to change</Text>
         </View>
       </View>
 
@@ -372,24 +384,15 @@ export default function BulkRangeModal({
       <View style={styles.timePickerRow}>
         <Text style={styles.timePickerLabel}>To</Text>
         <View style={styles.timePickerCenter}>
-          <Text style={styles.timePickerTime}>{endSlot.timeOut}</Text>
+          <TouchableOpacity
+            style={styles.timePickerTappable}
+            onPress={() => setShowToPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.timePickerTime}>{endSlot.timeOut}</Text>
+          </TouchableOpacity>
           <Text style={styles.timePickerSlotLabel}>Slot #{endIndex + 1}</Text>
-        </View>
-        <View style={styles.timePickerButtons}>
-          <TouchableOpacity
-            style={[styles.adjustBtn, endIndex <= startIndex && styles.adjustBtnDisabled]}
-            onPress={() => adjustEnd(-1)}
-            disabled={endIndex <= startIndex}
-          >
-            <ChevronUp size={18} color={colors.primaryText} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.adjustBtn, endIndex >= slots.length - 1 && styles.adjustBtnDisabled]}
-            onPress={() => adjustEnd(1)}
-            disabled={endIndex >= slots.length - 1}
-          >
-            <ChevronDown size={18} color={colors.primaryText} />
-          </TouchableOpacity>
+          <Text style={styles.tapHint}>Tap to change</Text>
         </View>
       </View>
 
@@ -461,6 +464,7 @@ export default function BulkRangeModal({
   const canProceed = step === 'range' ? selectedSlotCount > 0 : step === 'category' ? !!selectedCategory : true;
 
   return (
+    <>
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -520,5 +524,28 @@ export default function BulkRangeModal({
         </View>
       </KeyboardAvoidingView>
     </Modal>
+
+    <TimePickerModal
+        visible={showFromPicker}
+        value={timeToDate(startSlot.timeIn)}
+        onConfirm={handleFromTimeConfirm}
+        onCancel={() => setShowFromPicker(false)}
+        accentColor={colors.highlight}
+        backgroundColor={colors.cardBackground}
+        textColor={colors.primaryText}
+        secondaryTextColor={colors.secondaryText}
+      />
+
+    <TimePickerModal
+        visible={showToPicker}
+        value={timeToDate(endSlot.timeOut)}
+        onConfirm={handleToTimeConfirm}
+        onCancel={() => setShowToPicker(false)}
+        accentColor={colors.highlight}
+        backgroundColor={colors.cardBackground}
+        textColor={colors.primaryText}
+        secondaryTextColor={colors.secondaryText}
+      />
+    </>
   );
 }
