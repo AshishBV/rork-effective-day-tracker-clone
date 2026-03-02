@@ -187,9 +187,10 @@ export default function TodayScreen() {
 
   const handleJumpToNow = useCallback(() => {
     if (listRef.current && currentSlotIndex >= 0) {
-      listRef.current.scrollToIndex({ index: Math.max(0, currentSlotIndex - 2), animated: true });
+      const safeIndex = Math.min(currentSlotIndex, selectedDay.slots.length - 1);
+      listRef.current.scrollToIndex({ index: Math.max(0, safeIndex), animated: true, viewPosition: 0.3 });
     }
-  }, [currentSlotIndex]);
+  }, [currentSlotIndex, selectedDay.slots.length]);
 
   const handleScrollToTop = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
