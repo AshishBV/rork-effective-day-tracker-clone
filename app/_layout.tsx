@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DataProvider } from '../contexts/DataContext';
 import { ActivitiesProvider } from '../contexts/ActivitiesContext';
+import { GoalsProvider } from '../contexts/GoalsContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { initializeRootNotificationListener, handleNotificationAction, NOTIFICATION_ACTION_TASK } from '../utils/notifications';
@@ -147,7 +148,9 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <DataProvider>
         <ActivitiesProvider>
-          <RootLayoutNav />
+          <GoalsProvider>
+            <RootLayoutNav />
+          </GoalsProvider>
         </ActivitiesProvider>
       </DataProvider>
     </QueryClientProvider>

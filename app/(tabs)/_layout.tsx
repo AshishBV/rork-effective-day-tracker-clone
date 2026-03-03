@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Tabs } from 'expo-router';
-import { Calendar, BarChart3, Settings, ClipboardList } from 'lucide-react-native';
+import { Calendar, BarChart3, Settings, ClipboardList, Target } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Animated, Platform, AccessibilityInfo } from 'react-native';
 
@@ -85,6 +85,12 @@ export default function TabLayout() {
     </AnimatedTabIcon>
   ), []);
 
+  const goalsIcon = useCallback(({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
+    <AnimatedTabIcon focused={focused}>
+      <Target size={size} color={color} />
+    </AnimatedTabIcon>
+  ), []);
+
   const statsIcon = useCallback(({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
     <AnimatedTabIcon focused={focused}>
       <BarChart3 size={size} color={color} />
@@ -99,6 +105,7 @@ export default function TabLayout() {
 
   const todayOptions = useMemo(() => ({ title: 'Today', tabBarIcon: todayIcon }), [todayIcon]);
   const reviewOptions = useMemo(() => ({ title: 'Review', tabBarIcon: reviewIcon }), [reviewIcon]);
+  const goalsOptions = useMemo(() => ({ title: 'Goals', tabBarIcon: goalsIcon }), [goalsIcon]);
   const statsOptions = useMemo(() => ({ title: 'Stats', tabBarIcon: statsIcon }), [statsIcon]);
   const settingsOptions = useMemo(() => ({ title: 'Settings', tabBarIcon: settingsIcon }), [settingsIcon]);
 
@@ -106,6 +113,7 @@ export default function TabLayout() {
     <Tabs screenOptions={screenOptions}>
       <Tabs.Screen name="(today)" options={todayOptions} />
       <Tabs.Screen name="review" options={reviewOptions} />
+      <Tabs.Screen name="goals" options={goalsOptions} />
       <Tabs.Screen name="stats" options={statsOptions} />
       <Tabs.Screen name="settings" options={settingsOptions} />
     </Tabs>
