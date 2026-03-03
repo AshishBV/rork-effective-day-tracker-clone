@@ -17,7 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useActivities } from '../contexts/ActivitiesContext';
 import { SHADOWS } from '../constants/theme';
 import { TimeSlot } from '../types/data';
-import TimePickerModal from './TimePickerModal';
+import DndTimePicker from './DndTimePicker';
 
 type Step = 'range' | 'category' | 'description';
 
@@ -71,13 +71,6 @@ export default function BulkRangeModal({
     return endIndex - startIndex + 1;
   }, [startIndex, endIndex]);
 
-  const timeToDate = useCallback((timeStr: string): Date => {
-    const [h, m] = timeStr.split(':').map(Number);
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d;
-  }, []);
-
   const findNearestSlotIndex = useCallback((date: Date, mode: 'start' | 'end'): number => {
     const totalMinutes = date.getHours() * 60 + date.getMinutes();
     let bestIndex = 0;
@@ -94,18 +87,20 @@ export default function BulkRangeModal({
     return bestIndex;
   }, [slots]);
 
-  const handleFromTimeConfirm = useCallback((date: Date) => {
+  const handleFromTimeSave = useCallback((hour: number, minute: number) => {
     Haptics.selectionAsync();
-    const idx = findNearestSlotIndex(date, 'start');
+    const d = new Date();
+    d.setHours(hour, minute, 0, 0);
+    const idx = findNearestSlotIndex(d, 'start');
     setStartIndex(Math.min(idx, endIndex));
-    setShowFromPicker(false);
   }, [findNearestSlotIndex, endIndex]);
 
-  const handleToTimeConfirm = useCallback((date: Date) => {
+  const handleToTimeSave = useCallback((hour: number, minute: number) => {
     Haptics.selectionAsync();
-    const idx = findNearestSlotIndex(date, 'end');
+    const d = new Date();
+    d.setHours(hour, minute, 0, 0);
+    const idx = findNearestSlotIndex(d, 'end');
     setEndIndex(Math.max(idx, startIndex));
-    setShowToPicker(false);
   }, [findNearestSlotIndex, startIndex]);
 
   const handleNextFromRange = useCallback(() => {
@@ -525,26 +520,24 @@ export default function BulkRangeModal({
       </KeyboardAvoidingView>
     </Modal>
 
-    <TimePickerModal
+    <DndTimePicker
         visible={showFromPicker}
-        value={timeToDate(startSlot.timeIn)}
-        onConfirm={handleFromTimeConfirm}
-        onCancel={() => setShowFromPicker(false)}
-        accentColor={colors.highlight}
-        backgroundColor={colors.cardBackground}
-        textColor={colors.primaryText}
-        secondaryTextColor={colors.secondaryText}
+        onClose={() => setShowFromPicker(false)}
+        onSave={handleFromTimeSave}
+        initialHour={parseInt(startSlot.timeIn.split(':')[0], 10)}
+        initialMinute={parseInt(startSlot.timeIn.split(':')[1], 10)}
+        title="From Time"
+        colors={colors}
       />
 
-    <TimePickerModal
+    <DndTimePicker
         visible={showToPicker}
-        value={timeToDate(endSlot.timeOut)}
-        onConfirm={handleToTimeConfirm}
-        onCancel={() => setShowToPicker(false)}
-        accentColor={colors.highlight}
-        backgroundColor={colors.cardBackground}
-        textColor={colors.primaryText}
-        secondaryTextColor={colors.secondaryText}
+        onClose={() => setShowToPicker(false)}
+        onSave={handleToTimeSave}
+        initialHour={parseInt(endSlot.timeOut.split(':')[0], 10)}
+        initialMinute={parseInt(endSlot.timeOut.split(':')[1], 10)}
+        title="To Time"
+        colors={colors}
       />
     </>
   );
