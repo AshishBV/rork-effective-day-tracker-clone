@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { ChevronLeft, ChevronRight, Maximize2, BookOpen } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useActivities } from '../../../contexts/ActivitiesContext';
 import { SHADOWS, CHART_THEMES } from '../../../constants/theme';
@@ -27,6 +28,7 @@ const WEEK_BUCKETS = [
 type ChartType = 'tef' | 'habits' | 'sleep' | 'steps' | 'weeklyTef' | 'weeklySleep' | 'weeklySteps' | 'weeklyActivity';
 
 export default function StatsScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const { days, settings, getActiveHabits } = useData();
   const { activities, getActivityByCode } = useActivities();
@@ -72,13 +74,12 @@ export default function StatsScreen() {
         const completedHabits = totalActiveHabits > 0 
           ? activeHabits.filter(h => dayData.habitCompletions?.[h.id]).length 
           : 0;
-        const habitScore = totalActiveHabits > 0 ? completedHabits / totalActiveHabits : 0;
         const hasHabitData = dayData.habitCompletions && Object.keys(dayData.habitCompletions).length > 0;
         
         data.push({
           day: d,
           er: filledSlots.length > 0 ? er : null,
-          habits: hasHabitData ? habitScore : null,
+          habits: hasHabitData ? completedHabits : null,
           sleep: dayData.sleepHours,
           steps: dayData.steps,
           hours,
@@ -229,14 +230,15 @@ export default function StatsScreen() {
             valueFormatter={(v) => `${Math.round(v * 100)}%`}
           />
         );
-      case 'habits':
+      case 'habits': {
+        const totalHabits = Math.max(activeHabits.length, 1);
         return (
           <BarChart
             data={habitData.map(d => ({ x: d.x, y: d.y || 0 }))}
             yLabel="Habits"
             yMin={0}
-            yMax={1}
-            yStep={0.2}
+            yMax={totalHabits}
+            yStep={totalHabits <= 5 ? 1 : Math.ceil(totalHabits / 5)}
             barColor={CHART_THEMES.habits.barColor}
             backgroundColor={CHART_THEMES.habits.background}
             width={LANDSCAPE_WIDTH}
@@ -244,6 +246,7 @@ export default function StatsScreen() {
             showValues
           />
         );
+      }
       case 'sleep':
         return (
           <LineChart
@@ -444,64 +447,38 @@ export default function StatsScreen() {
       paddingVertical: 4,
       borderRadius: 4,
     },
-    journalEmptyCard: {
+    journalNavRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
       backgroundColor: colors.cardBackground,
       borderRadius: 16,
-      padding: 32,
+      padding: 16,
       marginHorizontal: 16,
       marginBottom: 16,
       borderWidth: 1,
       borderColor: colors.cardBorder,
+    },
+    journalNavIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: colors.background,
       alignItems: 'center',
-      gap: 12,
+      justifyContent: 'center',
+      marginRight: 14,
     },
-    journalEmptyText: {
-      fontSize: 14,
-      color: colors.secondaryText,
-      fontStyle: 'italic',
-    },
-    journalCard: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 14,
-      padding: 16,
-      marginHorizontal: 16,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-    },
-    journalDateText: {
-      fontSize: 14,
-      fontWeight: '600' as const,
-      color: colors.highlight,
-      marginBottom: 10,
-      letterSpacing: 0.2,
-    },
-    journalHighlightRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      marginBottom: 6,
-      paddingLeft: 4,
-    },
-    journalBullet: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: colors.highlight,
-      marginTop: 6,
-      marginRight: 10,
-      opacity: 0.6,
-    },
-    journalHighlightText: {
-      fontSize: 14,
-      color: colors.primaryText,
-      lineHeight: 20,
+    journalNavContent: {
       flex: 1,
     },
-    journalDivider: {
-      width: 1,
-      height: 16,
-      backgroundColor: colors.divider,
-      alignSelf: 'center',
-      marginVertical: 2,
+    journalNavTitle: {
+      fontSize: 16,
+      fontWeight: '500' as const,
+      color: colors.primaryText,
+    },
+    journalNavSubtitle: {
+      fontSize: 13,
+      color: colors.secondaryText,
+      marginTop: 2,
     },
   }), [colors]);
 
@@ -547,8 +524,8 @@ export default function StatsScreen() {
           data={habitData.map(d => ({ x: d.x, y: d.y || 0 }))}
           yLabel="Habits"
           yMin={0}
-          yMax={1}
-          yStep={0.2}
+          yMax={Math.max(activeHabits.length, 1)}
+          yStep={activeHabits.length <= 5 ? 1 : Math.ceil(activeHabits.length / 5)}
           barColor={CHART_THEMES.habits.barColor}
           backgroundColor={CHART_THEMES.habits.background}
           width={CHART_WIDTH}
@@ -731,45 +708,20 @@ export default function StatsScreen() {
         )}
       </View>
 
-      <Text style={styles.sectionTitle}>Monthly Highlights Journal</Text>
-      {(() => {
-        const highlightDays: { dateKey: string; date: Date; highlights: string[] }[] = [];
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateKey = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const dayData = days[dateKey];
-          if (!dayData?.highlights) continue;
-          const filled = dayData.highlights.filter((h: string) => h && h.trim().length > 0);
-          if (filled.length === 0) continue;
-          highlightDays.push({ dateKey, date: new Date(currentMonth.year, currentMonth.month, d), highlights: filled });
-        }
-        if (highlightDays.length === 0) {
-          return (
-            <View style={[styles.journalEmptyCard, SHADOWS.card]}>
-              <BookOpen size={24} color={colors.secondaryText} style={{ opacity: 0.5 }} />
-              <Text style={styles.journalEmptyText}>No highlights recorded this month</Text>
-            </View>
-          );
-        }
-        return highlightDays.map((entry, idx) => {
-          const dayLabel = entry.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-          return (
-            <View key={entry.dateKey}>
-              <View style={[styles.journalCard, SHADOWS.card]}>
-                <Text style={styles.journalDateText}>{dayLabel}</Text>
-                {entry.highlights.map((h, i) => (
-                  <View key={i} style={styles.journalHighlightRow}>
-                    <View style={styles.journalBullet} />
-                    <Text style={styles.journalHighlightText}>{h}</Text>
-                  </View>
-                ))}
-              </View>
-              {idx < highlightDays.length - 1 && (
-                <View style={styles.journalDivider} />
-              )}
-            </View>
-          );
-        });
-      })()}
+      <TouchableOpacity
+        style={[styles.journalNavRow, SHADOWS.card]}
+        activeOpacity={0.7}
+        onPress={() => router.push({ pathname: '/stats/highlights' as any, params: { year: currentMonth.year.toString(), month: currentMonth.month.toString() } })}
+      >
+        <View style={styles.journalNavIcon}>
+          <BookOpen size={20} color={colors.highlight} />
+        </View>
+        <View style={styles.journalNavContent}>
+          <Text style={styles.journalNavTitle}>Monthly Highlights Journal</Text>
+          <Text style={styles.journalNavSubtitle}>Tap to view this month&apos;s highlights</Text>
+        </View>
+        <ChevronRight size={20} color={colors.secondaryText} />
+      </TouchableOpacity>
 
       <View style={{ height: 40 }} />
 

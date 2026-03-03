@@ -11,6 +11,7 @@ export default function StatsLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Statistics' }} />
+      <Stack.Screen name="highlights" options={{ title: 'Monthly Highlights' }} />
     </Stack>
   );
 }

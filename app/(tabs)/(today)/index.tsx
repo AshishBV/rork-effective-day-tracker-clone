@@ -346,9 +346,12 @@ export default function TodayScreen() {
     />
   ), [handleGroupPress, handleGroupLongPress]);
 
-  const bannerText = unfilledCount > 0
-    ? `${displayName}, you can still reach an effective ratio of: ${maxReachableER.toFixed(2)}`
-    : `${displayName}, you crushed it — ER of ${currentER.toFixed(2)}`;
+  const bannerPrefix = unfilledCount > 0
+    ? `${displayName}, you can still reach an effective ratio of:`
+    : `${displayName}, you crushed it — ER of`;
+  const bannerERValue = unfilledCount > 0
+    ? maxReachableER.toFixed(2)
+    : currentER.toFixed(2);
 
   const daySpentSlots = Math.floor(daySpent * totalSlots);
 
@@ -394,8 +397,15 @@ export default function TodayScreen() {
       fontStyle: 'italic' as const,
       color: 'rgba(255,255,255,0.75)',
       textAlign: 'center',
-      lineHeight: 22,
+      lineHeight: 28,
       letterSpacing: 0.3,
+      fontFamily: 'Georgia',
+    },
+    bannerERNumber: {
+      fontSize: 20,
+      fontWeight: '300' as const,
+      fontStyle: 'italic' as const,
+      color: 'rgba(255,255,255,0.9)',
       fontFamily: 'Georgia',
     },
     fillButton: {
@@ -526,7 +536,10 @@ export default function TodayScreen() {
 
       <View style={styles.bannerContainer}>
         <View style={styles.bannerInner}>
-          <Text style={styles.bannerText}>{bannerText}</Text>
+          <Text style={styles.bannerText}>
+            {bannerPrefix}{' '}
+            <Text style={styles.bannerERNumber}>{bannerERValue}</Text>
+          </Text>
         </View>
       </View>
 
@@ -577,7 +590,7 @@ export default function TodayScreen() {
         </View>
       </View>
     </View>
-  ), [selectedDate, setSelectedDate, days, daySpent, bannerText, previousSlot, handleQuickLog, handleEditPreviousSlot, handleJumpToNow, daySpentSlots, isMultiSelectMode, handleFillLast30, displayName, activeHabits, styles, zoomLevel, timeSettings.slotDuration, handleZoomIn, handleZoomOut, colors]);
+  ), [selectedDate, setSelectedDate, days, daySpent, bannerPrefix, bannerERValue, previousSlot, handleQuickLog, handleEditPreviousSlot, handleJumpToNow, daySpentSlots, isMultiSelectMode, handleFillLast30, displayName, activeHabits, styles, zoomLevel, timeSettings.slotDuration, handleZoomIn, handleZoomOut, colors]);
 
   const ListFooter = useMemo(() => (
     <View style={styles.footerContainer}>
