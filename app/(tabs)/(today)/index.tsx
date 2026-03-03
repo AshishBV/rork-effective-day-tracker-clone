@@ -116,13 +116,16 @@ export default function TodayScreen() {
   useEffect(() => {
     if (!hasScrolled.current && listRef.current && currentSlotIndex > 0 && selectedDay.slots.length > 0) {
       const targetIndex = getInitialScrollIndex(timeSettings);
-      const safeIndex = Math.max(0, Math.min(targetIndex, selectedDay.slots.length - 1));
-      setTimeout(() => {
-        listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
-        hasScrolled.current = true;
-      }, 100);
+      const dataLength = isBaseZoom ? selectedDay.slots.length : (groupedSlots?.length ?? 0);
+      if (dataLength > 0) {
+        const safeIndex = Math.max(0, Math.min(targetIndex, dataLength - 1));
+        setTimeout(() => {
+          listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
+          hasScrolled.current = true;
+        }, 100);
+      }
     }
-  }, [currentSlotIndex, timeSettings, selectedDay.slots.length]);
+  }, [currentSlotIndex, timeSettings, selectedDay.slots.length, isBaseZoom, groupedSlots]);
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -185,11 +188,14 @@ export default function TodayScreen() {
   }, [editingSlot, updateSlot, showToast, getActivityLabel]);
 
   const handleJumpToNow = useCallback(() => {
-    if (listRef.current && currentSlotIndex >= 0 && selectedDay.slots.length > 0) {
-      const safeIndex = Math.max(0, Math.min(currentSlotIndex, selectedDay.slots.length - 1));
-      listRef.current.scrollToIndex({ index: safeIndex, animated: true, viewPosition: 0.4 });
+    if (listRef.current && currentSlotIndex >= 0) {
+      const dataLength = isBaseZoom ? selectedDay.slots.length : (groupedSlots?.length ?? 0);
+      if (dataLength > 0) {
+        const safeIndex = Math.max(0, Math.min(currentSlotIndex, dataLength - 1));
+        listRef.current.scrollToIndex({ index: safeIndex, animated: true, viewPosition: 0.4 });
+      }
     }
-  }, [currentSlotIndex, selectedDay.slots.length]);
+  }, [currentSlotIndex, selectedDay.slots.length, isBaseZoom, groupedSlots]);
 
   const handleScrollToTop = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
