@@ -116,13 +116,11 @@ export default function TodayScreen() {
   useEffect(() => {
     if (!hasScrolled.current && listRef.current && currentSlotIndex > 0 && selectedDay.slots.length > 0) {
       const targetIndex = getInitialScrollIndex(timeSettings);
-      const safeIndex = Math.min(targetIndex, selectedDay.slots.length - 1);
-      if (safeIndex >= 0) {
-        setTimeout(() => {
-          listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
-          hasScrolled.current = true;
-        }, 100);
-      }
+      const safeIndex = Math.max(0, Math.min(targetIndex, selectedDay.slots.length - 1));
+      setTimeout(() => {
+        listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
+        hasScrolled.current = true;
+      }, 100);
     }
   }, [currentSlotIndex, timeSettings, selectedDay.slots.length]);
 
@@ -187,9 +185,9 @@ export default function TodayScreen() {
   }, [editingSlot, updateSlot, showToast, getActivityLabel]);
 
   const handleJumpToNow = useCallback(() => {
-    if (listRef.current && currentSlotIndex >= 0) {
-      const safeIndex = Math.min(currentSlotIndex, selectedDay.slots.length - 1);
-      listRef.current.scrollToIndex({ index: Math.max(0, safeIndex), animated: true, viewPosition: 0.4 });
+    if (listRef.current && currentSlotIndex >= 0 && selectedDay.slots.length > 0) {
+      const safeIndex = Math.max(0, Math.min(currentSlotIndex, selectedDay.slots.length - 1));
+      listRef.current.scrollToIndex({ index: safeIndex, animated: true, viewPosition: 0.4 });
     }
   }, [currentSlotIndex, selectedDay.slots.length]);
 
@@ -615,9 +613,13 @@ export default function TodayScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           onScrollToIndexFailed={(info) => {
-            setTimeout(() => {
-              listRef.current?.scrollToIndex({ index: info.index, animated: false });
-            }, 100);
+            const dataLength = selectedDay.slots.length;
+            if (dataLength > 0) {
+              const safeIndex = Math.max(0, Math.min(info.index, dataLength - 1));
+              setTimeout(() => {
+                listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
+              }, 200);
+            }
           }}
           showsVerticalScrollIndicator={false}
           initialNumToRender={20}
