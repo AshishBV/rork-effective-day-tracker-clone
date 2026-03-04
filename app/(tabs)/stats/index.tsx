@@ -10,6 +10,7 @@ import { getHoursPerCategory, getSlotErPoints, calculateDayER } from '../../../u
 import LineChart from '../../../components/charts/LineChart';
 import BarChart from '../../../components/charts/BarChart';
 import ChartLandscapeModal from '../../../components/ChartLandscapeModal';
+import HabitTrackerGrid from '../../../components/HabitTrackerGrid';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -99,9 +100,42 @@ export default function StatsScreen() {
   }, [days, currentMonth, daysInMonth, activeHabits, activities]);
 
   const erData = monthData.map(d => ({ x: d.day, y: d.er }));
-  const habitData = monthData.map(d => ({ x: d.day, y: d.habits || 0 }));
   const sleepData = monthData.map(d => ({ x: d.day, y: d.sleep }));
   const stepsData = monthData.map(d => ({ x: d.day, y: d.steps }));
+
+  const habitGridData = useMemo(() => {
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === currentMonth.year && now.getMonth() === currentMonth.month;
+    const today = now.getDate();
+
+    return activeHabits.map(habit => {
+      const habitDays: { day: number; completed: boolean; isFuture: boolean }[] = [];
+      let completedCount = 0;
+      let pastDayCount = 0;
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const isFuture = isCurrentMonth ? d > today : currentMonth.year > now.getFullYear() || (currentMonth.year === now.getFullYear() && currentMonth.month > now.getMonth());
+        const dateKey = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayData = days[dateKey];
+        const completed = dayData?.habitCompletions?.[habit.id] === true;
+
+        if (!isFuture) {
+          pastDayCount++;
+          if (completed) completedCount++;
+        }
+
+        habitDays.push({ day: d, completed, isFuture });
+      }
+
+      return {
+        id: habit.id,
+        name: habit.name,
+        emoji: habit.emoji,
+        days: habitDays,
+        completionRate: pastDayCount > 0 ? (completedCount / pastDayCount) * 100 : 0,
+      };
+    });
+  }, [activeHabits, days, currentMonth, daysInMonth]);
 
   const weeklyAverages = useMemo(() => {
     const activityCodes = activities.map(a => a.code);
@@ -231,20 +265,17 @@ export default function StatsScreen() {
           />
         );
       case 'habits': {
-        const totalHabits = Math.max(activeHabits.length, 1);
         return (
-          <BarChart
-            data={habitData.map(d => ({ x: d.x, y: d.y || 0 }))}
-            yLabel="Habits"
-            yMin={0}
-            yMax={totalHabits}
-            yStep={totalHabits <= 5 ? 1 : Math.ceil(totalHabits / 5)}
-            barColor={CHART_THEMES.habits.barColor}
-            backgroundColor={CHART_THEMES.habits.background}
-            width={LANDSCAPE_WIDTH}
-            height={LANDSCAPE_HEIGHT}
-            showValues
-          />
+          <View style={{ width: LANDSCAPE_WIDTH, maxHeight: LANDSCAPE_HEIGHT }}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <HabitTrackerGrid
+                habits={habitGridData}
+                daysInMonth={daysInMonth}
+                accentColor="#127475"
+                isLandscape
+              />
+            </ScrollView>
+          </View>
         );
       }
       case 'sleep':
@@ -515,21 +546,15 @@ export default function StatsScreen() {
         />
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('habits')}>
+      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} activeOpacity={0.8} onPress={() => openLandscape('habits')}>
         <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Habit Score vs Days</Text>
+          <Text style={styles.chartTitle}>Habit Tracker</Text>
           <Maximize2 size={16} color={colors.secondaryText} />
         </View>
-        <BarChart
-          data={habitData.map(d => ({ x: d.x, y: d.y || 0 }))}
-          yLabel="Habits"
-          yMin={0}
-          yMax={Math.max(activeHabits.length, 1)}
-          yStep={activeHabits.length <= 5 ? 1 : Math.ceil(activeHabits.length / 5)}
-          barColor={CHART_THEMES.habits.barColor}
-          backgroundColor={CHART_THEMES.habits.background}
-          width={CHART_WIDTH}
-          height={200}
+        <HabitTrackerGrid
+          habits={habitGridData}
+          daysInMonth={daysInMonth}
+          accentColor="#127475"
         />
       </TouchableOpacity>
 
