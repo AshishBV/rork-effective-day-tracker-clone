@@ -113,6 +113,13 @@ export default function TodayScreen() {
     return null;
   }, [selectedDay.slots]);
 
+  const isBaseZoom = zoomLevel === (timeSettings.slotDuration as ZoomLevel) || zoomLevel <= timeSettings.slotDuration;
+
+  const groupedSlots = useMemo(() => {
+    if (isBaseZoom) return null;
+    return groupSlotsByZoom(selectedDay.slots, zoomLevel, timeSettings.slotDuration, activities);
+  }, [selectedDay.slots, zoomLevel, timeSettings.slotDuration, activities, isBaseZoom]);
+
   useEffect(() => {
     if (!hasScrolled.current && listRef.current && currentSlotIndex > 0 && selectedDay.slots.length > 0) {
       const targetIndex = getInitialScrollIndex(timeSettings);
@@ -278,13 +285,6 @@ export default function TodayScreen() {
       return idx < ZOOM_LEVELS.length - 1 ? ZOOM_LEVELS[idx + 1] : prev;
     });
   }, []);
-
-  const isBaseZoom = zoomLevel === (timeSettings.slotDuration as ZoomLevel) || zoomLevel <= timeSettings.slotDuration;
-
-  const groupedSlots = useMemo(() => {
-    if (isBaseZoom) return null;
-    return groupSlotsByZoom(selectedDay.slots, zoomLevel, timeSettings.slotDuration, activities);
-  }, [selectedDay.slots, zoomLevel, timeSettings.slotDuration, activities, isBaseZoom]);
 
   const handleGroupPress = useCallback((group: GroupedSlot) => {
     if (group.slots.length === 1) {
