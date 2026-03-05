@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DataProvider } from '../contexts/DataContext';
 import { ActivitiesProvider } from '../contexts/ActivitiesContext';
 import { GoalsProvider } from '../contexts/GoalsContext';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { initializeRootNotificationListener, handleNotificationAction, NOTIFICATION_ACTION_TASK } from '../utils/notifications';
@@ -48,6 +49,28 @@ function NotificationScheduler() {
   return null;
 }
 
+function AuthGate() {
+  const { isAuthenticated, isInitialized } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const inAuthGroup = segments[0] === 'login';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      console.log('[AuthGate] Not authenticated, redirecting to login');
+      router.replace('/login' as any);
+    } else if (isAuthenticated && inAuthGroup) {
+      console.log('[AuthGate] Authenticated, redirecting to home');
+      router.replace('/' as any);
+    }
+  }, [isAuthenticated, isInitialized, segments, router]);
+
+  return null;
+}
+
 function ThemedApp() {
   const { colors, isDark } = useTheme();
 
@@ -79,6 +102,7 @@ function ThemedApp() {
     <NavigationThemeProvider value={navigationTheme}>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
         <NotificationScheduler />
+        <AuthGate />
         <Stack
           screenOptions={{
             headerBackTitle: 'Back',
@@ -89,6 +113,13 @@ function ThemedApp() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="login"
+            options={{
+              headerShown: false,
+              animation: 'fade',
+            }}
+          />
           <Stack.Screen
             name="modal"
             options={{
@@ -146,13 +177,15 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <DataProvider>
-        <ActivitiesProvider>
-          <GoalsProvider>
-            <RootLayoutNav />
-          </GoalsProvider>
-        </ActivitiesProvider>
-      </DataProvider>
+      <AuthProvider>
+        <DataProvider>
+          <ActivitiesProvider>
+            <GoalsProvider>
+              <RootLayoutNav />
+            </GoalsProvider>
+          </ActivitiesProvider>
+        </DataProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

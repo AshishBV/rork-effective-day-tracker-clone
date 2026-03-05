@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { 
   User, 
@@ -14,10 +14,14 @@ import {
   ListChecks,
   Paintbrush,
   Check,
+  LogOut,
+  Ticket,
+  Crown,
 } from 'lucide-react-native';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useData } from '../../../contexts/DataContext';
 import { useActivities } from '../../../contexts/ActivitiesContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import { SHADOWS } from '../../../constants/theme';
 
 import { DEFAULT_QUOTE } from '../../../types/data';
@@ -28,9 +32,10 @@ interface SettingsRowProps {
   subtitle: string;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
+  destructive?: boolean;
 }
 
-function SettingsRow({ icon, title, subtitle, onPress, colors }: SettingsRowProps) {
+function SettingsRow({ icon, title, subtitle, onPress, colors, destructive }: SettingsRowProps) {
   const styles = useMemo(() => StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -56,7 +61,7 @@ function SettingsRow({ icon, title, subtitle, onPress, colors }: SettingsRowProp
     title: {
       fontSize: 16,
       fontWeight: '500' as const,
-      color: colors.primaryText,
+      color: destructive ? '#EF5350' : colors.primaryText,
     },
     subtitle: {
       fontSize: 13,
@@ -66,7 +71,7 @@ function SettingsRow({ icon, title, subtitle, onPress, colors }: SettingsRowProp
     chevron: {
       marginLeft: 8,
     },
-  }), [colors]);
+  }), [colors, destructive]);
 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
@@ -85,9 +90,13 @@ export default function SettingsScreen() {
   const { colors, themeMode } = useTheme();
   const { settings } = useData();
   const { activeActivities } = useActivities();
+  const { user, isPremium, signOut, redeemInviteCode } = useAuth();
 
   const { updateSettings } = useData();
   const [showBannerPicker, setShowBannerPicker] = useState(false);
+  const [showInviteInput, setShowInviteInput] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+
   const displayName = settings.displayName || 'Ashish';
 
   const BANNER_COLORS = [
@@ -99,6 +108,29 @@ export default function SettingsScreen() {
   const handleBannerColorSelect = useCallback((color: string) => {
     updateSettings({ bannerColor: color });
   }, [updateSettings]);
+
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out? Your data will remain synced.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+      ]
+    );
+  }, [signOut]);
+
+  const handleRedeemCode = useCallback(async () => {
+    if (!inviteCode.trim()) return;
+    try {
+      await redeemInviteCode(inviteCode.trim());
+      setInviteCode('');
+      Alert.alert('Premium Unlocked!', 'All features are now available.');
+    } catch (e: any) {
+      Alert.alert('Invalid Code', e?.message || 'The invite code is not valid.');
+    }
+  }, [inviteCode, redeemInviteCode]);
+
   const quoteText = settings.quoteText || DEFAULT_QUOTE;
   const truncatedQuote = quoteText.length > 35 ? quoteText.substring(0, 35) + '...' : quoteText;
 
@@ -192,11 +224,82 @@ export default function SettingsScreen() {
       shadowRadius: 4,
       elevation: 4,
     },
-  }), [colors]);
+    premiumBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginHorizontal: 16,
+      marginTop: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      backgroundColor: isPremium ? 'rgba(38, 166, 154, 0.1)' : colors.divider,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: isPremium ? 'rgba(38, 166, 154, 0.3)' : colors.cardBorder,
+      gap: 8,
+    },
+    premiumText: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: isPremium ? '#26A69A' : colors.secondaryText,
+    },
+    inviteContainer: {
+      marginHorizontal: 16,
+      marginTop: 8,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+    },
+    inviteRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    inviteInput: {
+      flex: 1,
+      backgroundColor: colors.background,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 15,
+      color: colors.primaryText,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+    },
+    inviteButton: {
+      backgroundColor: colors.highlight,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    inviteButtonText: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: '#FFFFFF',
+    },
+    userEmail: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      textAlign: 'center' as const,
+      marginTop: 4,
+    },
+  }), [colors, isPremium]);
 
   return (
     <View style={styles.container}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.premiumBadge}>
+          <Crown size={18} color={isPremium ? '#26A69A' : colors.secondaryText} />
+          <Text style={styles.premiumText}>
+            {isPremium ? 'Premium Active' : 'Free Plan'}
+          </Text>
+        </View>
+        {user?.email && (
+          <Text style={styles.userEmail}>{user.email}</Text>
+        )}
+
         <Text style={styles.sectionTitle}>General</Text>
         <View style={[styles.section, SHADOWS.card]}>
           <SettingsRow
@@ -301,15 +404,62 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {!isPremium && (
+          <>
+            <Text style={styles.sectionTitle}>Premium</Text>
+            <View style={[styles.section, SHADOWS.card]}>
+              <View style={styles.lastRow}>
+                <SettingsRow
+                  icon={<Ticket size={20} color={colors.highlight} />}
+                  title="Enter Invite Code"
+                  subtitle="Unlock all premium features"
+                  onPress={() => setShowInviteInput(!showInviteInput)}
+                  colors={colors}
+                />
+              </View>
+            </View>
+            {showInviteInput && (
+              <View style={styles.inviteContainer}>
+                <View style={styles.inviteRow}>
+                  <TextInput
+                    style={styles.inviteInput}
+                    value={inviteCode}
+                    onChangeText={setInviteCode}
+                    placeholder="Enter invite code"
+                    placeholderTextColor={colors.secondaryText + '80'}
+                    autoCapitalize="none"
+                    testID="settings-invite-code"
+                  />
+                  <TouchableOpacity
+                    style={styles.inviteButton}
+                    onPress={handleRedeemCode}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.inviteButtonText}>Redeem</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </>
+        )}
+
         <Text style={styles.sectionTitle}>App</Text>
         <View style={[styles.section, SHADOWS.card]}>
+          <SettingsRow
+            icon={<Info size={20} color={colors.highlight} />}
+            title="About"
+            subtitle="v1.0.0"
+            onPress={() => router.push('/settings/about' as any)}
+            colors={colors}
+          />
           <View style={styles.lastRow}>
             <SettingsRow
-              icon={<Info size={20} color={colors.highlight} />}
-              title="About"
-              subtitle="v1.0.0"
-              onPress={() => router.push('/settings/about' as any)}
+              icon={<LogOut size={20} color="#EF5350" />}
+              title="Sign Out"
+              subtitle={user?.email || 'Not signed in'}
+              onPress={handleLogout}
               colors={colors}
+              destructive
             />
           </View>
         </View>

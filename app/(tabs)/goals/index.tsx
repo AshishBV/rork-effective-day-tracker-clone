@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,13 +13,15 @@ import {
 import { Check, RotateCcw } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useGoals, getWeekResetLabel, getMonthLabel, getYearLabel } from '@/contexts/GoalsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { SHADOWS } from '@/constants/theme';
+import PremiumLock from '@/components/PremiumLock';
 
 interface GoalRowProps {
   text: string;
   completed: boolean;
   index: number;
-  onChangeText: (text: string) => void;
+  onSaveText: (text: string) => void;
   onToggle: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
   placeholder: string;
@@ -28,29 +30,32 @@ interface GoalRowProps {
 const GoalRow = React.memo(function GoalRow({
   text,
   completed,
-  onChangeText,
+  onSaveText,
   onToggle,
   colors,
   placeholder,
 }: GoalRowProps) {
+  const [localText, setLocalText] = useState(text);
   const checkScale = useRef(new Animated.Value(completed ? 1 : 0)).current;
-  const strikeWidth = useRef(new Animated.Value(completed ? 1 : 0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(checkScale, {
-        toValue: completed ? 1 : 0,
-        friction: 6,
-        tension: 120,
-        useNativeDriver: true,
-      }),
-      Animated.timing(strikeWidth, {
-        toValue: completed ? 1 : 0,
-        duration: 250,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [completed, checkScale, strikeWidth]);
+    setLocalText(text);
+  }, [text]);
+
+  useEffect(() => {
+    Animated.spring(checkScale, {
+      toValue: completed ? 1 : 0,
+      friction: 6,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  }, [completed, checkScale]);
+
+  const handleBlur = useCallback(() => {
+    if (localText !== text) {
+      onSaveText(localText);
+    }
+  }, [localText, text, onSaveText]);
 
   const rowStyles = useMemo(() => ({
     container: {
@@ -95,8 +100,9 @@ const GoalRow = React.memo(function GoalRow({
       </TouchableOpacity>
       <TextInput
         style={rowStyles.input}
-        value={text}
-        onChangeText={onChangeText}
+        value={localText}
+        onChangeText={setLocalText}
+        onBlur={handleBlur}
         placeholder={placeholder}
         placeholderTextColor={colors.secondaryText + '60'}
         multiline={false}
@@ -222,6 +228,14 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
     );
   }, [period, title, resetPeriod]);
 
+  const handleSaveText = useCallback((index: number, text: string) => {
+    updateGoalText(period, index, text);
+  }, [period, updateGoalText]);
+
+  const handleToggle = useCallback((index: number) => {
+    toggleGoalCompleted(period, index);
+  }, [period, toggleGoalCompleted]);
+
   const styles = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: colors.cardBackground,
@@ -321,8 +335,8 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
               text={goal.text}
               completed={goal.completed}
               index={idx}
-              onChangeText={(text) => updateGoalText(period, idx, text)}
-              onToggle={() => toggleGoalCompleted(period, idx)}
+              onSaveText={(text) => handleSaveText(idx, text)}
+              onToggle={() => handleToggle(idx)}
               colors={colors}
               placeholder={placeholders[idx] || `Goal ${idx + 1}...`}
             />
@@ -336,6 +350,7 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
 
 export default function GoalsScreen() {
   const { colors } = useTheme();
+  const { isPremium } = useAuth();
   const now = new Date();
 
   const styles = useMemo(() => StyleSheet.create({
@@ -373,6 +388,10 @@ export default function GoalsScreen() {
           <Text style={styles.pageSubtitle}>Set intentions. Stay accountable.</Text>
         </View>
 
+        {!isPremium ? (
+          <PremiumLock message="Goals are a premium feature. Enter invite code in Settings to unlock." />
+        ) : (
+        <>
         <GoalSection
           period="weekly"
           title="This Week"
@@ -393,6 +412,8 @@ export default function GoalsScreen() {
           subtitle={getYearLabel(now)}
           resetHint="Resets January 1st"
         />
+        </>
+        )}
       </ScrollView>
     </View>
   );

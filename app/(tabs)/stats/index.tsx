@@ -4,13 +4,15 @@ import { ChevronLeft, ChevronRight, Maximize2, BookOpen } from 'lucide-react-nat
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useActivities } from '../../../contexts/ActivitiesContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import { SHADOWS, CHART_THEMES } from '../../../constants/theme';
 import { useData } from '../../../contexts/DataContext';
-import { getHoursPerCategory, getSlotErPoints, calculateDayER } from '../../../utils/timeUtils';
+import { getHoursPerCategory, calculateDayER } from '../../../utils/timeUtils';
 import LineChart from '../../../components/charts/LineChart';
 import BarChart from '../../../components/charts/BarChart';
 import ChartLandscapeModal from '../../../components/ChartLandscapeModal';
 import HabitTrackerGrid from '../../../components/HabitTrackerGrid';
+import PremiumLock from '../../../components/PremiumLock';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -33,6 +35,7 @@ export default function StatsScreen() {
   const { colors } = useTheme();
   const { days, settings, getActiveHabits } = useData();
   const { activities, getActivityByCode } = useActivities();
+  const { isPremium } = useAuth();
   const activeHabits = useMemo(() => getActiveHabits(), [getActiveHabits]);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -511,6 +514,15 @@ export default function StatsScreen() {
       color: colors.secondaryText,
       marginTop: 2,
     },
+    premiumLockCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      overflow: 'hidden',
+    },
   }), [colors]);
 
   return (
@@ -546,207 +558,215 @@ export default function StatsScreen() {
         />
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} activeOpacity={0.8} onPress={() => openLandscape('habits')}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Habit Tracker</Text>
-          <Maximize2 size={16} color={colors.secondaryText} />
-        </View>
-        <HabitTrackerGrid
-          habits={habitGridData}
-          daysInMonth={daysInMonth}
-          accentColor="#127475"
-        />
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('sleep')}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Sleep vs Days</Text>
-          <Maximize2 size={16} color={colors.secondaryText} />
-        </View>
-        <LineChart
-          data={sleepData}
-          yLabel="Sleep Hours"
-          yMin={0}
-          yMax={10}
-          yStep={1}
-          goalLine={settings.sleepGoal}
-          lineColor={CHART_THEMES.sleep.lineColor}
-          backgroundColor={CHART_THEMES.sleep.background}
-          goalColor={CHART_THEMES.sleep.goalColor}
-          width={CHART_WIDTH}
-          height={200}
-        />
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('steps')}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Steps vs Days</Text>
-          <Maximize2 size={16} color={colors.secondaryText} />
-        </View>
-        <LineChart
-          data={stepsData}
-          yLabel="Steps"
-          yMin={0}
-          yMax={12000}
-          yStep={2000}
-          goalLine={settings.stepsGoal}
-          lineColor={CHART_THEMES.steps.lineColor}
-          backgroundColor={CHART_THEMES.steps.background}
-          goalColor={CHART_THEMES.steps.goalColor}
-          width={CHART_WIDTH}
-          height={200}
-        />
-      </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>Weekly Averages</Text>
-
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('weeklyTef')}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Average TEF per Week</Text>
-          <Maximize2 size={16} color={colors.secondaryText} />
-        </View>
-        <BarChart
-          data={weeklyAverages.map(w => ({ x: w.label, y: w.avgER, label: w.label }))}
-          yLabel="Avg TEF"
-          yMin={0}
-          yMax={1}
-          yStep={0.2}
-          showValues
-          barColor={CHART_THEMES.weeklyTef.barColor}
-          backgroundColor={CHART_THEMES.weeklyTef.background}
-          width={CHART_WIDTH}
-          height={180}
-        />
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('weeklySleep')}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Average Sleep per Week</Text>
-          <Maximize2 size={16} color={colors.secondaryText} />
-        </View>
-        <BarChart
-          data={weeklyAverages.map(w => ({ x: w.label, y: w.avgSleep, label: w.label }))}
-          yLabel="Avg Hours"
-          yMin={0}
-          yMax={10}
-          yStep={2}
-          showValues
-          barColor={CHART_THEMES.weeklySleep.barColor}
-          backgroundColor={CHART_THEMES.weeklySleep.background}
-          width={CHART_WIDTH}
-          height={180}
-        />
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('weeklySteps')}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Average Steps per Week</Text>
-          <Maximize2 size={16} color={colors.secondaryText} />
-        </View>
-        <BarChart
-          data={weeklyAverages.map(w => ({ x: w.label, y: w.avgSteps, label: w.label }))}
-          yLabel="Avg Steps"
-          yMin={0}
-          yMax={12000}
-          yStep={2000}
-          showValues
-          barColor={CHART_THEMES.weeklySteps.barColor}
-          backgroundColor={CHART_THEMES.weeklySteps.background}
-          width={CHART_WIDTH}
-          height={180}
-        />
-      </TouchableOpacity>
-
-      {weeklyAverages.map((week, index) => (
-        week.avgHours.length > 0 && (
-          <TouchableOpacity 
-            key={index} 
-            style={[styles.chartCard, SHADOWS.card]}
-            onPress={() => openLandscape('weeklyActivity', index)}
-          >
+      {isPremium ? (
+        <>
+          <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} activeOpacity={0.8} onPress={() => openLandscape('habits')}>
             <View style={styles.chartHeader}>
-              <Text style={styles.chartTitle}>Avg Hours per Activity ({week.label})</Text>
+              <Text style={styles.chartTitle}>Habit Tracker</Text>
+              <Maximize2 size={16} color={colors.secondaryText} />
+            </View>
+            <HabitTrackerGrid
+              habits={habitGridData}
+              daysInMonth={daysInMonth}
+              accentColor="#127475"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('sleep')}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Sleep vs Days</Text>
+              <Maximize2 size={16} color={colors.secondaryText} />
+            </View>
+            <LineChart
+              data={sleepData}
+              yLabel="Sleep Hours"
+              yMin={0}
+              yMax={10}
+              yStep={1}
+              goalLine={settings.sleepGoal}
+              lineColor={CHART_THEMES.sleep.lineColor}
+              backgroundColor={CHART_THEMES.sleep.background}
+              goalColor={CHART_THEMES.sleep.goalColor}
+              width={CHART_WIDTH}
+              height={200}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('steps')}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Steps vs Days</Text>
+              <Maximize2 size={16} color={colors.secondaryText} />
+            </View>
+            <LineChart
+              data={stepsData}
+              yLabel="Steps"
+              yMin={0}
+              yMax={12000}
+              yStep={2000}
+              goalLine={settings.stepsGoal}
+              lineColor={CHART_THEMES.steps.lineColor}
+              backgroundColor={CHART_THEMES.steps.background}
+              goalColor={CHART_THEMES.steps.goalColor}
+              width={CHART_WIDTH}
+              height={200}
+            />
+          </TouchableOpacity>
+
+          <Text style={styles.sectionTitle}>Weekly Averages</Text>
+
+          <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('weeklyTef')}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Average TEF per Week</Text>
               <Maximize2 size={16} color={colors.secondaryText} />
             </View>
             <BarChart
-              data={week.avgHours.map(h => ({ 
-                x: h.key, 
-                y: h.avg, 
-                color: h.color,
-                label: h.key
-              }))}
-              yLabel="Hours"
+              data={weeklyAverages.map(w => ({ x: w.label, y: w.avgER, label: w.label }))}
+              yLabel="Avg TEF"
               yMin={0}
-              yMax={Math.max(6, ...week.avgHours.map(h => Math.ceil(h.avg)))}
-              yStep={1}
+              yMax={1}
+              yStep={0.2}
               showValues
+              barColor={CHART_THEMES.weeklyTef.barColor}
+              backgroundColor={CHART_THEMES.weeklyTef.background}
               width={CHART_WIDTH}
-              height={160}
+              height={180}
             />
           </TouchableOpacity>
-        )
-      ))}
 
-      <Text style={styles.sectionTitle}>Insights</Text>
-
-      <View style={[styles.insightCard, SHADOWS.card]}>
-        <Text style={styles.insightTitle}>Best Weekday by TEF</Text>
-        {insights.bestWeekday ? (
-          <>
-            <Text style={styles.insightValue}>
-              {insights.bestWeekday.name}: {((insights.bestWeekday.avg || 0) * 100).toFixed(0)}%
-            </Text>
-            <View style={styles.weekdayList}>
-              {insights.weekdayAverages.map(w => (
-                <Text key={w.day} style={styles.weekdayItem}>
-                  {w.name}: {((w.avg || 0) * 100).toFixed(0)}%
-                </Text>
-              ))}
+          <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('weeklySleep')}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Average Sleep per Week</Text>
+              <Maximize2 size={16} color={colors.secondaryText} />
             </View>
-          </>
-        ) : (
-          <Text style={styles.insightNoData}>Not enough data</Text>
-        )}
-      </View>
+            <BarChart
+              data={weeklyAverages.map(w => ({ x: w.label, y: w.avgSleep, label: w.label }))}
+              yLabel="Avg Hours"
+              yMin={0}
+              yMax={10}
+              yStep={2}
+              showValues
+              barColor={CHART_THEMES.weeklySleep.barColor}
+              backgroundColor={CHART_THEMES.weeklySleep.background}
+              width={CHART_WIDTH}
+              height={180}
+            />
+          </TouchableOpacity>
 
-      <View style={[styles.insightCard, SHADOWS.card]}>
-        <Text style={styles.insightTitle}>Sleep vs TEF Correlation</Text>
-        {insights.sleepCorrelation !== null ? (
-          <>
-            <Text style={styles.insightValue}>r = {insights.sleepCorrelation.toFixed(3)}</Text>
-            <Text style={styles.insightNote}>Correlation is not causation.</Text>
-          </>
-        ) : (
-          <Text style={styles.insightNoData}>Not enough data (need 7+ days with both sleep and TEF)</Text>
-        )}
-      </View>
+          <TouchableOpacity style={[styles.chartCard, SHADOWS.card]} onPress={() => openLandscape('weeklySteps')}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Average Steps per Week</Text>
+              <Maximize2 size={16} color={colors.secondaryText} />
+            </View>
+            <BarChart
+              data={weeklyAverages.map(w => ({ x: w.label, y: w.avgSteps, label: w.label }))}
+              yLabel="Avg Steps"
+              yMin={0}
+              yMax={12000}
+              yStep={2000}
+              showValues
+              barColor={CHART_THEMES.weeklySteps.barColor}
+              backgroundColor={CHART_THEMES.weeklySteps.background}
+              width={CHART_WIDTH}
+              height={180}
+            />
+          </TouchableOpacity>
 
-      <View style={[styles.insightCard, SHADOWS.card]}>
-        <Text style={styles.insightTitle}>Steps vs TEF Correlation</Text>
-        {insights.stepsCorrelation !== null ? (
-          <>
-            <Text style={styles.insightValue}>r = {insights.stepsCorrelation.toFixed(3)}</Text>
-            <Text style={styles.insightNote}>Correlation is not causation.</Text>
-          </>
-        ) : (
-          <Text style={styles.insightNoData}>Not enough data (need 7+ days with both steps and TEF)</Text>
-        )}
-      </View>
+          {weeklyAverages.map((week, index) => (
+            week.avgHours.length > 0 && (
+              <TouchableOpacity 
+                key={index} 
+                style={[styles.chartCard, SHADOWS.card]}
+                onPress={() => openLandscape('weeklyActivity', index)}
+              >
+                <View style={styles.chartHeader}>
+                  <Text style={styles.chartTitle}>Avg Hours per Activity ({week.label})</Text>
+                  <Maximize2 size={16} color={colors.secondaryText} />
+                </View>
+                <BarChart
+                  data={week.avgHours.map(h => ({ 
+                    x: h.key, 
+                    y: h.avg, 
+                    color: h.color,
+                    label: h.key
+                  }))}
+                  yLabel="Hours"
+                  yMin={0}
+                  yMax={Math.max(6, ...week.avgHours.map(h => Math.ceil(h.avg)))}
+                  yStep={1}
+                  showValues
+                  width={CHART_WIDTH}
+                  height={160}
+                />
+              </TouchableOpacity>
+            )
+          ))}
 
-      <TouchableOpacity
-        style={[styles.journalNavRow, SHADOWS.card]}
-        activeOpacity={0.7}
-        onPress={() => router.push({ pathname: '/stats/highlights' as any, params: { year: currentMonth.year.toString(), month: currentMonth.month.toString() } })}
-      >
-        <View style={styles.journalNavIcon}>
-          <BookOpen size={20} color={colors.highlight} />
+          <Text style={styles.sectionTitle}>Insights</Text>
+
+          <View style={[styles.insightCard, SHADOWS.card]}>
+            <Text style={styles.insightTitle}>Best Weekday by TEF</Text>
+            {insights.bestWeekday ? (
+              <>
+                <Text style={styles.insightValue}>
+                  {insights.bestWeekday.name}: {((insights.bestWeekday.avg || 0) * 100).toFixed(0)}%
+                </Text>
+                <View style={styles.weekdayList}>
+                  {insights.weekdayAverages.map(w => (
+                    <Text key={w.day} style={styles.weekdayItem}>
+                      {w.name}: {((w.avg || 0) * 100).toFixed(0)}%
+                    </Text>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <Text style={styles.insightNoData}>Not enough data</Text>
+            )}
+          </View>
+
+          <View style={[styles.insightCard, SHADOWS.card]}>
+            <Text style={styles.insightTitle}>Sleep vs TEF Correlation</Text>
+            {insights.sleepCorrelation !== null ? (
+              <>
+                <Text style={styles.insightValue}>r = {insights.sleepCorrelation.toFixed(3)}</Text>
+                <Text style={styles.insightNote}>Correlation is not causation.</Text>
+              </>
+            ) : (
+              <Text style={styles.insightNoData}>Not enough data (need 7+ days with both sleep and TEF)</Text>
+            )}
+          </View>
+
+          <View style={[styles.insightCard, SHADOWS.card]}>
+            <Text style={styles.insightTitle}>Steps vs TEF Correlation</Text>
+            {insights.stepsCorrelation !== null ? (
+              <>
+                <Text style={styles.insightValue}>r = {insights.stepsCorrelation.toFixed(3)}</Text>
+                <Text style={styles.insightNote}>Correlation is not causation.</Text>
+              </>
+            ) : (
+              <Text style={styles.insightNoData}>Not enough data (need 7+ days with both steps and TEF)</Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.journalNavRow, SHADOWS.card]}
+            activeOpacity={0.7}
+            onPress={() => router.push({ pathname: '/stats/highlights' as any, params: { year: currentMonth.year.toString(), month: currentMonth.month.toString() } })}
+          >
+            <View style={styles.journalNavIcon}>
+              <BookOpen size={20} color={colors.highlight} />
+            </View>
+            <View style={styles.journalNavContent}>
+              <Text style={styles.journalNavTitle}>Monthly Highlights Journal</Text>
+              <Text style={styles.journalNavSubtitle}>Tap to view this month&apos;s highlights</Text>
+            </View>
+            <ChevronRight size={20} color={colors.secondaryText} />
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.premiumLockCard}>
+          <PremiumLock message="Habit grid, sleep/steps charts, weekly averages, insights, and highlights journal are premium features. Enter invite code in Settings to unlock." />
         </View>
-        <View style={styles.journalNavContent}>
-          <Text style={styles.journalNavTitle}>Monthly Highlights Journal</Text>
-          <Text style={styles.journalNavSubtitle}>Tap to view this month&apos;s highlights</Text>
-        </View>
-        <ChevronRight size={20} color={colors.secondaryText} />
-      </TouchableOpacity>
+      )}
 
       <View style={{ height: 40 }} />
 

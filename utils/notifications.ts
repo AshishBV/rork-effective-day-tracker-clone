@@ -334,6 +334,28 @@ export async function initializeRootNotificationListener(): Promise<(() => void)
   responseListenerActive = true;
   console.log('[Notifications] Setting up ROOT notification response listener (foreground)');
 
+  const foregroundSub = Notifications.addNotificationReceivedListener(async (notification: any) => {
+    const data = notification.request.content.data;
+    if (data?.type === 'quick_log') {
+      const todayKey = getCurrentDateKey();
+      let filled = false;
+
+      if (typeof data?.slotIndex === 'number') {
+        filled = await isSlotAlreadyFilled(todayKey, data.slotIndex as number);
+      }
+      if (!filled && typeof data?.timeIn === 'string') {
+        filled = await isSlotFilledByTime(data.timeIn as string);
+      }
+
+      if (filled) {
+        console.log(`[Notifications] Foreground listener: slot ${data.slotIndex ?? data.timeIn} already filled — dismissing`);
+        try {
+          await Notifications.dismissNotificationAsync(notification.request.identifier);
+        } catch (_e) {}
+      }
+    }
+  });
+
   const subscription = Notifications.addNotificationResponseReceivedListener(async (response: any) => {
     const actionId = response.actionIdentifier;
     const data = response.notification.request.content.data as Record<string, unknown> | undefined;
@@ -354,6 +376,7 @@ export async function initializeRootNotificationListener(): Promise<(() => void)
   return () => {
     responseListenerActive = false;
     subscription.remove();
+    foregroundSub.remove();
     console.log('[Notifications] ROOT listener removed');
   };
 }

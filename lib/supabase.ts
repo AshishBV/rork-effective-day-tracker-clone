@@ -39,11 +39,32 @@ export async function getDeviceId(): Promise<string> {
 }
 
 export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        storage: AsyncStorage as any,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    })
   : null;
 
 export function isSupabaseConfigured(): boolean {
   return !!supabase;
+}
+
+async function getEffectiveUserId(): Promise<string> {
+  if (supabase) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        return session.user.id;
+      }
+    } catch (e) {
+      console.log('[Supabase] Could not get auth user, falling back to device ID:', e);
+    }
+  }
+  return getDeviceId();
 }
 
 export async function getLocalSyncTimestamp(dataType: string): Promise<string | null> {
@@ -74,15 +95,15 @@ export async function upsertAppData(dataType: string, data: unknown): Promise<bo
   }
 
   try {
-    const deviceId = await getDeviceId();
+    const userId = await getEffectiveUserId();
     const now = new Date().toISOString();
-    console.log(`[Supabase] Upserting ${dataType} for device ${deviceId}`);
+    console.log(`[Supabase] Upserting ${dataType} for user ${userId}`);
 
     const { error } = await supabase
       .from('app_data')
       .upsert(
         {
-          device_id: deviceId,
+          device_id: userId,
           data_type: dataType,
           data: data,
           updated_at: now,
@@ -116,13 +137,13 @@ export async function fetchAppData<T>(dataType: string): Promise<FetchResult<T>>
   }
 
   try {
-    const deviceId = await getDeviceId();
-    console.log(`[Supabase] Fetching ${dataType} for device ${deviceId}`);
+    const userId = await getEffectiveUserId();
+    console.log(`[Supabase] Fetching ${dataType} for user ${userId}`);
 
     const { data, error } = await supabase
       .from('app_data')
       .select('data, updated_at')
-      .eq('device_id', deviceId)
+      .eq('device_id', userId)
       .eq('data_type', dataType)
       .single();
 
