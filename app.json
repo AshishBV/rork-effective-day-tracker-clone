@@ -39,6 +39,10 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "supabaseUrl": "https://clanybcgzahhfejbkeap.supabase.co",
+      "supabaseAnonKey": "sb_publishable_dNsr1qHRNfSBbOrDFk6hpg_sw45b0k9"
     }
   }
 }
