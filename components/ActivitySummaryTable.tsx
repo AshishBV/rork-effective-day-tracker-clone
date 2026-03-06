@@ -250,7 +250,7 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
       });
     });
 
-    // Group by description and sum durations
+    // Group by description, sum durations, sort descending
     const result: Record<string, SlotDetail[]> = {};
     Object.entries(raw).forEach(([code, slots]) => {
       const grouped: Record<string, SlotDetail> = {};
@@ -262,7 +262,7 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
           grouped[key] = { ...slot };
         }
       });
-      result[code] = Object.values(grouped);
+      result[code] = Object.values(grouped).sort((a, b) => b.duration - a.duration);
     });
 
     return result;
