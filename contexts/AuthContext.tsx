@@ -151,6 +151,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth-session'] });
+      queryClient.invalidateQueries({ queryKey: ['days'] });
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
   });
 
