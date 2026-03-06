@@ -181,6 +181,12 @@ export function useNotifications() {
     }
   }, [settings.strictMode, scheduleFollowUpIfNeeded]);
 
+  // Reschedule whenever a slot is logged
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    debouncedReschedule();
+  }, [days]);
+
   return {
     rescheduleNotifications,
   };
