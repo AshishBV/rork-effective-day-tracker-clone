@@ -230,18 +230,18 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
   };
 
   const slotsByCategory = useMemo(() => {
-    const result: Record<string, SlotDetail[]> = {};
+    const raw: Record<string, SlotDetail[]> = {};
     selectedDay.slots.forEach((slot: TimeSlot) => {
       if (!slot.activityCategory) return;
       const code = slot.activityCategory;
-      if (!result[code]) result[code] = [];
+      if (!raw[code]) raw[code] = [];
 
       const [inH, inM] = slot.timeIn.split(':').map(Number);
       const [outH, outM] = slot.timeOut.split(':').map(Number);
       const durMinutes = (outH * 60 + outM) - (inH * 60 + inM);
       const duration = durMinutes > 0 ? durMinutes / 60 : 0.25;
 
-      result[code].push({
+      raw[code].push({
         slotIndex: slot.index,
         timeIn: slot.timeIn,
         timeOut: slot.timeOut,
@@ -249,6 +249,22 @@ export default function ActivitySummaryTable({ hoursPerCategory }: ActivitySumma
         description: slot.performedActivityText || '',
       });
     });
+
+    // Group by description and sum durations
+    const result: Record<string, SlotDetail[]> = {};
+    Object.entries(raw).forEach(([code, slots]) => {
+      const grouped: Record<string, SlotDetail> = {};
+      slots.forEach((slot) => {
+        const key = slot.description || `${slot.timeIn} → ${slot.timeOut}`;
+        if (grouped[key]) {
+          grouped[key].duration += slot.duration;
+        } else {
+          grouped[key] = { ...slot };
+        }
+      });
+      result[code] = Object.values(grouped);
+    });
+
     return result;
   }, [selectedDay.slots]);
 
