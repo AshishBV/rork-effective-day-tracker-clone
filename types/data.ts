@@ -110,7 +110,7 @@ export const DEFAULT_HABITS: Habit[] = [
   { id: 'h1', name: '10 minutes meditation', emoji: '🧘', active: true },
   { id: 'h2', name: '20 minutes reading', emoji: '📚', active: true },
   { id: 'h3', name: '30 minutes exercise', emoji: '💪', active: true },
-  { id: 'h4', name: 'No fap & no drugs', emoji: '🚫', active: true },
+  { id: 'h4', name: 'Drink 8 glasses of water', emoji: '💧', active: true },
   { id: 'h5', name: 'Screen time < 1 hour', emoji: '📱', active: true },
 ];
 
@@ -118,7 +118,7 @@ export const DEFAULT_HABIT_NAMES = [
   '10 minutes meditation',
   '20 minutes reading',
   '30 minutes exercise',
-  'No fap & no drugs',
+  'Drink 8 glasses of water',
   'Screen time < 1 hour',
 ];
 
@@ -146,7 +146,7 @@ export const DEFAULT_SETTINGS: Settings = {
   categoryOverrides: null,
   themeMode: 'light',
   customHabits: DEFAULT_HABITS,
-  displayName: 'Ashish',
+  displayName: '',
   dailyReminderEnabled: true,
   quoteText: DEFAULT_QUOTE,
   timeSettings: DEFAULT_TIME_SETTINGS,
