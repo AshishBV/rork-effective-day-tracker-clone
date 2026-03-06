@@ -257,7 +257,7 @@ function ReviewScreenInner() {
     },
     habitTextChecked: {
       color: colors.secondaryText,
-      textDecorationLine: 'line-through',
+      textDecorationLine: 'line-through' as const,
     },
     todoRow: {
       flexDirection: 'row',
@@ -267,6 +267,7 @@ function ReviewScreenInner() {
     todoInput: {
       flex: 1,
       fontSize: 14,
+      fontWeight: '400' as const,
       color: colors.primaryText,
       paddingVertical: 10,
       paddingHorizontal: 12,
@@ -275,11 +276,12 @@ function ReviewScreenInner() {
       marginLeft: 8,
     },
     todoInputCompleted: {
-      textDecorationLine: 'line-through',
+      textDecorationLine: 'line-through' as const,
       color: colors.secondaryText,
     },
     textInput: {
       fontSize: 14,
+      fontWeight: '400' as const,
       color: colors.primaryText,
       paddingVertical: 10,
       paddingHorizontal: 12,
@@ -307,7 +309,7 @@ function ReviewScreenInner() {
       backgroundColor: colors.background,
       borderRadius: 8,
       minWidth: 80,
-      textAlign: 'center',
+      textAlign: 'center' as const,
     },
   }), [colors]);
 
@@ -381,7 +383,7 @@ function ReviewScreenInner() {
               initialValue={todo.text}
               onSave={todoSavers[index]}
               placeholder={`Task ${index + 1}`}
-              placeholderTextColor={colors.secondaryText}
+              placeholderTextColor={colors.secondaryText + '60'}
               style={[styles.todoInput, todo.completed && styles.todoInputCompleted]}
             />
           </View>
@@ -397,7 +399,7 @@ function ReviewScreenInner() {
             initialValue={text}
             onSave={gratitudeSavers[index]}
             placeholder="I'm grateful for..."
-            placeholderTextColor={colors.secondaryText}
+            placeholderTextColor={colors.secondaryText + '60'}
             style={styles.textInput}
             multiline
           />
@@ -413,7 +415,7 @@ function ReviewScreenInner() {
             initialValue={text}
             onSave={highlightSavers[index]}
             placeholder={`Highlight ${index + 1}`}
-            placeholderTextColor={colors.secondaryText}
+            placeholderTextColor={colors.secondaryText + '60'}
             style={styles.textInput}
             multiline
           />
