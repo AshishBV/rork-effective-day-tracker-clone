@@ -716,7 +716,12 @@ export default function TodayScreen() {
           showToast(`Logged ${activityLabel} for ${indices.length} slots`);
           setBulkRangeVisible(false);
         }}
-        onClose={() => setBulkRangeVisible(false)}
+        onClear={(indices) => {
+  clearSlots(indices);
+  showToast(`Cleared ${indices.length} slots`);
+  setBulkRangeVisible(false);
+}}
+onClose={() => setBulkRangeVisible(false)}
       />
 
       <Toast
