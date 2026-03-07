@@ -11,32 +11,26 @@ const AnimatedTabIcon = React.memo(function AnimatedTabIcon({
   children: React.ReactNode;
   focused: boolean;
 }) {
-  const scale = useRef(new Animated.Value(focused ? 1.08 : 1)).current;
-  const translateY = useRef(new Animated.Value(focused ? -1 : 0)).current;
-  const opacity = useRef(new Animated.Value(focused ? 1 : 0.78)).current;
+  const scale = useRef(new Animated.Value(focused ? 1.03 : 1)).current;
+  const opacity = useRef(new Animated.Value(focused ? 1 : 0.85)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(scale, {
-        toValue: focused ? 1.08 : 1,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: focused ? -1 : 0,
-        duration: 180,
+        toValue: focused ? 1.03 : 1,
+        duration: 120,
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
-        toValue: focused ? 1 : 0.78,
-        duration: 180,
+        toValue: focused ? 1 : 0.85,
+        duration: 120,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [focused, scale, translateY, opacity]);
+  }, [focused, scale, opacity]);
 
   return (
-    <Animated.View style={{ transform: [{ scale }, { translateY }], opacity }}>
+    <Animated.View style={{ transform: [{ scale }], opacity }}>
       {children}
     </Animated.View>
   );
@@ -81,54 +75,54 @@ export default function TabLayout() {
       tabBarStyle,
       headerShown: false,
       tabBarLabelStyle,
-      animation: reduceMotion ? 'none' as const : 'shift' as const,
+      animation: 'none' as const,
     }),
-    [colors.highlight, colors.secondaryText, tabBarStyle, tabBarLabelStyle, reduceMotion]
+    [colors.highlight, colors.secondaryText, tabBarStyle, tabBarLabelStyle]
   );
 
   const todayIcon = useCallback(
     ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
-      <AnimatedTabIcon focused={focused}>
+      <AnimatedTabIcon focused={reduceMotion ? false : focused}>
         <Calendar size={size} color={color} />
       </AnimatedTabIcon>
     ),
-    []
+    [reduceMotion]
   );
 
   const reviewIcon = useCallback(
     ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
-      <AnimatedTabIcon focused={focused}>
+      <AnimatedTabIcon focused={reduceMotion ? false : focused}>
         <ClipboardList size={size} color={color} />
       </AnimatedTabIcon>
     ),
-    []
+    [reduceMotion]
   );
 
   const goalsIcon = useCallback(
     ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
-      <AnimatedTabIcon focused={focused}>
+      <AnimatedTabIcon focused={reduceMotion ? false : focused}>
         <Target size={size} color={color} />
       </AnimatedTabIcon>
     ),
-    []
+    [reduceMotion]
   );
 
   const statsIcon = useCallback(
     ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
-      <AnimatedTabIcon focused={focused}>
+      <AnimatedTabIcon focused={reduceMotion ? false : focused}>
         <BarChart3 size={size} color={color} />
       </AnimatedTabIcon>
     ),
-    []
+    [reduceMotion]
   );
 
   const settingsIcon = useCallback(
     ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
-      <AnimatedTabIcon focused={focused}>
+      <AnimatedTabIcon focused={reduceMotion ? false : focused}>
         <Settings size={size} color={color} />
       </AnimatedTabIcon>
     ),
-    []
+    [reduceMotion]
   );
 
   const todayOptions = useMemo(() => ({ title: 'Today', tabBarIcon: todayIcon }), [todayIcon]);
