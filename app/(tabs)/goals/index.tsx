@@ -14,7 +14,6 @@ import { Check, RotateCcw } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useGoals, getWeekResetLabel, getMonthLabel, getYearLabel } from '@/contexts/GoalsContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { SHADOWS } from '@/constants/theme';
 import PremiumLock from '@/components/PremiumLock';
 
 interface GoalRowProps {
@@ -62,7 +61,12 @@ const GoalRow = React.memo(function GoalRow({
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       paddingVertical: 14,
-      paddingHorizontal: 4,
+      paddingHorizontal: 14,
+      marginVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
     },
     checkbox: {
       width: 26,
@@ -79,10 +83,11 @@ const GoalRow = React.memo(function GoalRow({
       flex: 1,
       fontSize: 15,
       color: completed ? colors.secondaryText : colors.primaryText,
-      fontStyle: 'italic' as const,
-      fontWeight: '300' as const,
+      fontWeight: '500' as const,
       paddingVertical: Platform.OS === 'web' ? 4 : 0,
-      letterSpacing: 0.2,
+      letterSpacing: 0.1,
+      textDecorationLine: completed ? 'line-through' as const : 'none' as const,
+      opacity: completed ? 0.7 : 1,
     },
   }), [completed, colors]);
 
@@ -104,7 +109,7 @@ const GoalRow = React.memo(function GoalRow({
         onChangeText={setLocalText}
         onBlur={handleBlur}
         placeholder={placeholder}
-        placeholderTextColor={colors.secondaryText + '60'}
+        placeholderTextColor={colors.secondaryText + '70'}
         multiline={false}
         returnKeyType="done"
         testID="goal-input"
@@ -138,14 +143,16 @@ function ProgressArc({ completed, total, size, colors }: ProgressArcProps) {
 
   return (
     <View style={{ width: trackSize, height: trackSize, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: trackSize,
-        height: trackSize,
-        borderRadius: trackSize / 2,
-        borderWidth: strokeWidth,
-        borderColor: colors.divider,
-        position: 'absolute',
-      }} />
+      <View
+        style={{
+          width: trackSize,
+          height: trackSize,
+          borderRadius: trackSize / 2,
+          borderWidth: strokeWidth,
+          borderColor: colors.divider,
+          position: 'absolute',
+        }}
+      />
       <Animated.View
         style={{
           width: trackSize,
@@ -160,12 +167,14 @@ function ProgressArc({ completed, total, size, colors }: ProgressArcProps) {
           }),
         }}
       />
-      <Text style={{
-        fontSize: 11,
-        fontWeight: '600' as const,
-        color: total > 0 ? colors.highlight : colors.secondaryText,
-        letterSpacing: -0.3,
-      }}>
+      <Text
+        style={{
+          fontSize: 11,
+          fontWeight: '700' as const,
+          color: total > 0 ? colors.highlight : colors.secondaryText,
+          letterSpacing: -0.2,
+        }}
+      >
         {completed}/{total}
       </Text>
     </View>
@@ -239,44 +248,47 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
   const styles = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: colors.cardBackground,
-      borderRadius: 20,
+      borderRadius: 22,
       marginBottom: 20,
       borderWidth: 1,
       borderColor: colors.cardBorder,
       overflow: 'hidden',
+      elevation: 3,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 22,
-      paddingTop: 22,
-      paddingBottom: 10,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 12,
     },
     headerLeft: {
       flex: 1,
+      paddingRight: 12,
     },
     title: {
-      fontSize: 13,
-      fontWeight: '600' as const,
-      color: colors.secondaryText,
+      fontSize: 12,
+      fontWeight: '700' as const,
+      color: colors.highlight,
       textTransform: 'uppercase',
-      letterSpacing: 1.5,
-      marginBottom: 4,
+      letterSpacing: 1.4,
+      marginBottom: 6,
     },
     subtitle: {
       fontSize: 22,
-      fontWeight: '300' as const,
-      fontStyle: 'italic',
+      fontWeight: '700' as const,
       color: colors.primaryText,
-      letterSpacing: -0.3,
+      letterSpacing: -0.4,
     },
     resetHint: {
-      fontSize: 11,
-      color: colors.secondaryText + 'AA',
-      marginTop: 3,
-      fontStyle: 'italic',
-      letterSpacing: 0.2,
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 5,
     },
     headerRight: {
       flexDirection: 'row',
@@ -284,31 +296,32 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
       gap: 12,
     },
     resetButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
       alignItems: 'center',
       justifyContent: 'center',
     },
     divider: {
       height: 1,
       backgroundColor: colors.divider,
-      marginHorizontal: 22,
+      marginHorizontal: 20,
     },
     goalsContainer: {
-      paddingHorizontal: 18,
-      paddingBottom: 12,
+      paddingHorizontal: 14,
+      paddingTop: 10,
+      paddingBottom: 14,
     },
     goalDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.divider,
-      marginLeft: 44,
+      display: 'none',
     },
   }), [colors]);
 
   return (
-    <View style={[styles.card, SHADOWS.card]}>
+    <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>{title}</Text>
@@ -370,10 +383,9 @@ export default function GoalsScreen() {
     },
     pageSubtitle: {
       fontSize: 14,
-      fontStyle: 'italic',
-      fontWeight: '300' as const,
+      fontWeight: '500' as const,
       color: colors.secondaryText,
-      letterSpacing: 0.3,
+      letterSpacing: 0.2,
     },
   }), [colors]);
 
@@ -391,28 +403,28 @@ export default function GoalsScreen() {
         {!isPremium ? (
           <PremiumLock message="Goals are a premium feature. Enter invite code in Settings to unlock." />
         ) : (
-        <>
-        <GoalSection
-          period="weekly"
-          title="This Week"
-          subtitle={`Week of ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-          resetHint={getWeekResetLabel()}
-        />
+          <>
+            <GoalSection
+              period="weekly"
+              title="This Week"
+              subtitle={`Week of ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+              resetHint={getWeekResetLabel()}
+            />
 
-        <GoalSection
-          period="monthly"
-          title="This Month"
-          subtitle={getMonthLabel(now)}
-          resetHint={`Resets ${new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-        />
+            <GoalSection
+              period="monthly"
+              title="This Month"
+              subtitle={getMonthLabel(now)}
+              resetHint={`Resets ${new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+            />
 
-        <GoalSection
-          period="yearly"
-          title="This Year"
-          subtitle={getYearLabel(now)}
-          resetHint="Resets January 1st"
-        />
-        </>
+            <GoalSection
+              period="yearly"
+              title="This Year"
+              subtitle={getYearLabel(now)}
+              resetHint="Resets January 1st"
+            />
+          </>
         )}
       </ScrollView>
     </View>
