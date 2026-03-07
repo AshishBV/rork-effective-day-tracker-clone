@@ -190,9 +190,11 @@ function ReviewScreenInner() {
     paddingVertical: 12,
   },
   navButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: colors.divider,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: colors.cardBackground,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
   },
   dateText: {
     fontSize: 18,
@@ -201,12 +203,20 @@ function ReviewScreenInner() {
   },
   card: {
     backgroundColor: colors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    padding: 18,
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 18,
+  
     borderWidth: 1,
     borderColor: colors.cardBorder,
+  
+    elevation: 3,
+  
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -215,10 +225,10 @@ function ReviewScreenInner() {
     marginBottom: 12,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '600' as const,
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.primaryText,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   habitScore: {
     fontSize: 16,
