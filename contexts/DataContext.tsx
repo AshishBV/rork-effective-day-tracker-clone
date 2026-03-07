@@ -196,7 +196,29 @@ export const [DataProvider, useData] = createContextHook(() => {
     if (days[dateKey]) {
       return days[dateKey];
     }
-    return createEmptyDay(dateKey, settings);
+
+    // Carry over incomplete todos from previous day
+    const date = new Date(dateKey + 'T12:00:00');
+    date.setDate(date.getDate() - 1);
+    const prevDateKey = getDateKey(date);
+    const prevDay = days[prevDateKey];
+
+    const emptyDay = createEmptyDay(dateKey, settings);
+
+    if (prevDay) {
+      const incompleteTodos = prevDay.todos.filter(t => t.text && !t.completed);
+      if (incompleteTodos.length > 0) {
+        const newTodos = [...emptyDay.todos];
+        incompleteTodos.forEach((todo, i) => {
+          if (i < newTodos.length) {
+            newTodos[i] = { text: todo.text, completed: false };
+          }
+        });
+        return { ...emptyDay, todos: newTodos };
+      }
+    }
+
+    return emptyDay;
   }, [days, settings]);
 
   const updateSlot = useCallback((slotIndex: number, updates: Partial<TimeSlot>, dateKey?: string) => {
