@@ -77,7 +77,9 @@ const MemoizedLocalTextInput = React.memo(LocalTextInput, (prev, next) => {
     prev.initialValue === next.initialValue &&
     prev.placeholder === next.placeholder &&
     prev.multiline === next.multiline &&
-    prev.keyboardType === next.keyboardType
+    prev.keyboardType === next.keyboardType &&
+    prev.placeholderTextColor === next.placeholderTextColor &&
+    JSON.stringify(prev.style) === JSON.stringify(next.style)
   );
 });
 
@@ -294,8 +296,8 @@ function ReviewScreenInner() {
   todoInputCompleted: {
     textDecorationLine: 'line-through' as const,
     color: colors.secondaryText,
+    opacity: 0.65,
   },
-
   textInput: {
     fontSize: 14,
     fontWeight: '400' as const,
