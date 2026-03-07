@@ -1,12 +1,14 @@
 import { Stack } from 'expo-router';
-import { THEME } from '../../../constants/theme';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 export default function ReviewLayout() {
+  const { colors } = useTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: THEME.background },
-        headerTintColor: THEME.primaryText,
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.primaryText,
         headerShadowVisible: false,
       }}
     >
