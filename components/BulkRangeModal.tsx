@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Clock, Check } from 'lucide-react-native';
+import { X, Clock, Check, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { useActivities } from '../contexts/ActivitiesContext';
@@ -28,6 +28,7 @@ interface BulkRangeModalProps {
   initialCategory?: string | null;
   initialDescription?: string;
   onApply: (indices: number[], category: string, description: string) => void;
+  onClear?: (indices: number[]) => void;
   onClose: () => void;
 }
 
@@ -38,6 +39,7 @@ export default function BulkRangeModal({
   initialCategory,
   initialDescription,
   onApply,
+  onClear,
   onClose,
 }: BulkRangeModalProps) {
   const { colors, isDark } = useTheme();
@@ -125,6 +127,17 @@ export default function BulkRangeModal({
     }
     onApply(indices, selectedCategory, description);
   }, [startIndex, endIndex, selectedCategory, description, onApply]);
+
+  const handleClear = useCallback(() => {
+    if (!onClear) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const indices: number[] = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      indices.push(i);
+    }
+    onClear(indices);
+    onClose();
+  }, [startIndex, endIndex, onClear, onClose]);
 
   const handleBack = useCallback(() => {
     if (step === 'description') setStep('category');
@@ -317,6 +330,21 @@ export default function BulkRangeModal({
       fontWeight: '600' as const,
       color: colors.primaryText,
     },
+    clearButton: {
+      flexDirection: 'row',
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      backgroundColor: colors.error + '20',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    clearButtonText: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: colors.error,
+    },
     nextButton: {
       flex: 2,
       flexDirection: 'row',
@@ -495,6 +523,14 @@ export default function BulkRangeModal({
                 {step === 'range' ? 'Cancel' : 'Back'}
               </Text>
             </TouchableOpacity>
+
+            {step === 'range' && onClear && (
+              <TouchableOpacity style={styles.clearButton} onPress={handleClear}>
+                <Trash2 size={16} color={colors.error} />
+                <Text style={styles.clearButtonText}>Clear</Text>
+              </TouchableOpacity>
+            )}
+
             {step === 'description' ? (
               <TouchableOpacity
                 style={[styles.nextButton, !canProceed && styles.nextButtonDisabled]}
