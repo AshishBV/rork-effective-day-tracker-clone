@@ -17,6 +17,7 @@ export const ER_POINTS_MAP: Record<string, number> = {
   'CA': 0.5,
   'I': 0,
   'S': 0,
+  'J': 1,
   'TW': 0,
 };
 
@@ -39,8 +40,9 @@ export const DEFAULT_ACTIVITIES: Activity[] = [
   { id: 'act_ec', code: 'EC', name: 'Extra-curricular', points: 1, erPoints: 1, color: '#FFE5A0', textColor: '#111111', isActive: true, sortOrder: 2 },
   { id: 'act_ca', code: 'CA', name: "Couldn't Avoid", points: 0, erPoints: 0.5, color: '#E6E6E6', textColor: '#111111', isActive: true, sortOrder: 3 },
   { id: 'act_i', code: 'I', name: 'Internet', points: 0, erPoints: 0, color: '#720026', textColor: '#FFFFFF', isActive: true, sortOrder: 4 },
-  { id: 'act_s', code: 'S', name: 'Social', points: 0, erPoints: 0, color: '#4A90A4', textColor: '#FFFFFF', isActive: true, sortOrder: 5 },
-  { id: 'act_tw', code: 'TW', name: 'Time Waste', points: 0, erPoints: 0, color: '#8B0000', textColor: '#FFFFFF', isActive: true, sortOrder: 6 },
+  { id: 'act_s', code: 'S', name: 'Sleep', points: 0, erPoints: 0, color: '#720026', textColor: '#FFFFFF', isActive: true, sortOrder: 5 },
+  { id: 'act_j', code: 'J', name: 'Job search', points: 1, erPoints: 1, color: '#e66d1c', textColor: '#FFFFFF', isActive: true, sortOrder: 6 },
+  { id: 'act_tw', code: 'TW', name: 'Time Waste', points: 0, erPoints: 0, color: '#8B0000', textColor: '#FFFFFF', isActive: true, sortOrder: 7 },
 ];
 
 export interface TimeSlot {
