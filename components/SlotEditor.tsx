@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { X, Check } from 'lucide-react-native';
+import { X, Check, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { useActivities } from '../contexts/ActivitiesContext';
@@ -80,6 +80,15 @@ export default function SlotEditor({
       handleCategorySelect(lastCategory);
     }
   }, [lastCategory, handleCategorySelect]);
+
+  const handleClear = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setActivityCategory(null);
+    setPlannedCategory(null);
+    setActivityText('');
+    onSave({ activityCategory: null, plannedCategory: null, performedActivityText: '' });
+    onClose();
+  }, [onSave, onClose]);
 
   const styles = useMemo(() => StyleSheet.create({
     overlay: {
@@ -204,17 +213,20 @@ export default function SlotEditor({
       borderTopWidth: 1,
       borderTopColor: colors.divider,
     },
-    cancelButton: {
-      flex: 1,
+    clearButton: {
+      flexDirection: 'row',
       paddingVertical: 14,
+      paddingHorizontal: 16,
       borderRadius: 12,
-      backgroundColor: colors.divider,
+      backgroundColor: colors.error + '20',
       alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
     },
-    cancelButtonText: {
-      fontSize: 16,
+    clearButtonText: {
+      fontSize: 14,
       fontWeight: '600' as const,
-      color: colors.primaryText,
+      color: colors.error,
     },
     saveButton: {
       flex: 1,
@@ -342,6 +354,12 @@ export default function SlotEditor({
           </ScrollView>
 
           <View style={styles.footer}>
+            {activityCategory && (
+              <TouchableOpacity style={styles.clearButton} onPress={handleClear}>
+                <Trash2 size={16} color={colors.error} />
+                <Text style={styles.clearButtonText}>Clear</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.saveButton} onPress={onClose}>
               <Check size={18} color="#FFFFFF" />
               <Text style={styles.saveButtonText}>Done</Text>
