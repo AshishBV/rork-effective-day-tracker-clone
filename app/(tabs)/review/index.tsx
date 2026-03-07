@@ -178,140 +178,155 @@ function ReviewScreenInner() {
   const displayDate = useMemo(() => new Date(viewDate + 'T12:00:00'), [viewDate]);
 
   const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    dateNav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-    },
-    navButton: {
-      padding: 8,
-      borderRadius: 8,
-      backgroundColor: colors.divider,
-    },
-    dateText: {
-      fontSize: 18,
-      fontWeight: '600' as const,
-      color: colors.primaryText,
-    },
-    card: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 16,
-      padding: 16,
-      marginHorizontal: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-    },
-    cardHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 12,
-    },
-    cardTitle: {
-      fontSize: 16,
-      fontWeight: '600' as const,
-      color: colors.primaryText,
-      marginBottom: 12,
-    },
-    habitScore: {
-      fontSize: 16,
-      fontWeight: '700' as const,
-      color: colors.highlight,
-    },
-    habitRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.divider,
-    },
-    checkbox: {
-      width: 24,
-      height: 24,
-      borderRadius: 6,
-      borderWidth: 2,
-      borderColor: colors.cardBorder,
-      marginRight: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    habitEmoji: {
-      fontSize: 16,
-      marginRight: 8,
-    },
-    checkboxChecked: {
-      backgroundColor: colors.success,
-      borderColor: colors.success,
-    },
-    habitText: {
-      fontSize: 14,
-      color: colors.primaryText,
-      flex: 1,
-    },
-    habitTextChecked: {
-      color: colors.secondaryText,
-      textDecorationLine: 'line-through' as const,
-    },
-    todoRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    todoInput: {
-      flex: 1,
-      fontSize: 14,
-      fontWeight: '400' as const,
-      color: colors.primaryText,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      backgroundColor: colors.background,
-      borderRadius: 8,
-      marginLeft: 8,
-    },
-    todoInputCompleted: {
-      textDecorationLine: 'line-through' as const,
-      color: colors.secondaryText,
-    },
-    textInput: {
-      fontSize: 14,
-      fontWeight: '400' as const,
-      color: colors.primaryText,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      backgroundColor: colors.background,
-      borderRadius: 8,
-      marginBottom: 8,
-      minHeight: 40,
-    },
-    metricRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 8,
-    },
-    metricLabel: {
-      fontSize: 14,
-      color: colors.primaryText,
-    },
-    metricInput: {
-      fontSize: 16,
-      fontWeight: '600' as const,
-      color: colors.primaryText,
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      backgroundColor: colors.background,
-      borderRadius: 8,
-      minWidth: 80,
-      textAlign: 'center' as const,
-    },
-  }), [colors]);
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  dateNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  navButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: colors.divider,
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: '600' as const,
+    color: colors.primaryText,
+  },
+  card: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: colors.primaryText,
+    marginBottom: 12,
+  },
+  habitScore: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: colors.highlight,
+  },
+  habitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.cardBorder,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  habitEmoji: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  habitText: {
+    fontSize: 14,
+    color: colors.primaryText,
+    flex: 1,
+  },
+  habitTextChecked: {
+    color: colors.secondaryText,
+    textDecorationLine: 'line-through' as const,
+  },
+  todoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
+  /* -------- FIXED INPUT COLORS -------- */
+
+  todoInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '400' as const,
+    color: colors.primaryText,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+
+  todoInputCompleted: {
+    textDecorationLine: 'line-through' as const,
+    color: colors.secondaryText,
+  },
+
+  textInput: {
+    fontSize: 14,
+    fontWeight: '400' as const,
+    color: colors.primaryText,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    marginBottom: 8,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+
+  metricLabel: {
+    fontSize: 14,
+    color: colors.primaryText,
+  },
+
+  metricInput: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: colors.primaryText,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    minWidth: 80,
+    textAlign: 'center' as const,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+
+}), [colors]);
 
   return (
     <KeyboardAvoidingView 
