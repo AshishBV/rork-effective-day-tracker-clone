@@ -65,13 +65,18 @@ export default function TabLayout() {
   }), []);
 
   const screenOptions = useMemo(() => ({
-    tabBarActiveTintColor: colors.highlight,
-    tabBarInactiveTintColor: colors.secondaryText,
-    tabBarStyle,
-    headerShown: false,
-    tabBarLabelStyle,
-    animation: reduceMotion ? 'none' as const : 'fade' as const,
-  }), [colors.highlight, colors.secondaryText, tabBarStyle, tabBarLabelStyle, reduceMotion]);
+  tabBarActiveTintColor: colors.highlight,
+  tabBarInactiveTintColor: colors.secondaryText,
+  tabBarStyle,
+  headerShown: true,
+  headerStyle: {
+    backgroundColor: colors.background,
+  },
+  headerTintColor: colors.primaryText,
+  headerShadowVisible: false,
+  tabBarLabelStyle,
+  animation: reduceMotion ? 'none' as const : 'fade' as const,
+}), [colors.highlight, colors.secondaryText, tabBarStyle, tabBarLabelStyle, reduceMotion, colors.background, colors.primaryText]);
 
   const todayIcon = useCallback(({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
     <AnimatedTabIcon focused={focused}>
