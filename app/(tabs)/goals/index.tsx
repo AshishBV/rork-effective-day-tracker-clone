@@ -60,11 +60,11 @@ const GoalRow = React.memo(function GoalRow({
     container: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      paddingVertical: 14,
-      paddingHorizontal: 14,
-      marginVertical: 6,
-      borderRadius: 16,
-      backgroundColor: colors.background,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      marginBottom: 8,
+      borderRadius: 12,
+      backgroundColor: colors.cardBackground,
       borderWidth: 1,
       borderColor: colors.cardBorder,
     },
@@ -248,23 +248,21 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
   const styles = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: colors.cardBackground,
-      borderRadius: 22,
-      marginBottom: 20,
+      borderRadius: 18,
+      padding: 18,
+      marginBottom: 18,
       borderWidth: 1,
       borderColor: colors.cardBorder,
-      overflow: 'hidden',
       elevation: 3,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
-      shadowRadius: 10,
+      shadowRadius: 8,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 20,
       paddingBottom: 12,
     },
     headerLeft: {
@@ -308,12 +306,9 @@ function GoalSection({ period, title, subtitle, resetHint }: GoalSectionProps) {
     divider: {
       height: 1,
       backgroundColor: colors.divider,
-      marginHorizontal: 20,
     },
     goalsContainer: {
-      paddingHorizontal: 14,
       paddingTop: 10,
-      paddingBottom: 14,
     },
     goalDivider: {
       display: 'none',
