@@ -49,12 +49,25 @@ function createEmptyPeriodGoals(periodKey: string, count: number = 5): PeriodGoa
   };
 }
 
+function createYearlyDefaultGoals(periodKey: string): PeriodGoals {
+  return {
+    periodKey,
+    goals: [
+      { text: 'Have 1M Subscribers on YouTube Channel', completed: false },
+      { text: 'Earn 100K / month from Trading', completed: false },
+      { text: 'Best Physical Shape', completed: false },
+      { text: 'Best Mental Space', completed: false },
+      { text: 'Buy BMW M5', completed: false },
+    ],
+  };
+}
+
 function getDefaultGoalsData(): GoalsData {
   const now = new Date();
   return {
     weekly: createEmptyPeriodGoals(getWeekKey(now)),
     monthly: createEmptyPeriodGoals(getMonthKey(now)),
-    yearly: createEmptyPeriodGoals(getYearKey(now)),
+    yearly: createYearlyDefaultGoals(getYearKey(now)),
   };
 }
 
@@ -76,7 +89,7 @@ function autoResetIfNeeded(data: GoalsData): GoalsData {
     changed = true;
   }
   if (data.yearly.periodKey !== currentYearKey) {
-    updated.yearly = createEmptyPeriodGoals(currentYearKey);
+    updated.yearly = createYearlyDefaultGoals(currentYearKey);
     changed = true;
   }
 
@@ -182,7 +195,12 @@ export const [GoalsProvider, useGoals] = createContextHook(() => {
     const now = new Date();
     const key = period === 'weekly' ? getWeekKey(now) : period === 'monthly' ? getMonthKey(now) : getYearKey(now);
     const updated = { ...goalsData };
-    updated[period] = createEmptyPeriodGoals(key);
+
+    updated[period] =
+      period === 'yearly'
+        ? createYearlyDefaultGoals(key)
+        : createEmptyPeriodGoals(key);
+
     saveGoals(updated);
   }, [goalsData, saveGoals]);
 
